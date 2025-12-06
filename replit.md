@@ -84,6 +84,7 @@ Preferred communication style: Simple, everyday language.
 - Currently logs OTP codes to console (placeholder implementation)
 - Designed to integrate with email service provider (e.g., SendGrid, AWS SES, Nodemailer)
 - OTP format: 6-digit code with 10-minute expiration
+- **TODO**: Set up SendGrid integration when ready to send real emails
 
 **Third-Party Libraries:**
 - **Radix UI**: Accessible component primitives
