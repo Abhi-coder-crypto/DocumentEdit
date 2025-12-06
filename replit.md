@@ -115,5 +115,24 @@ Preferred communication style: Simple, everyday language.
 - `RESEND_API_KEY` - Resend API key for sending OTP emails
 
 **Admin Configuration:**
-- Current admin email: `abhijeet18012001@gmail.com` (hardcoded in server/routes.ts line 124)
-- To change admin email, update the email check in server/routes.ts
+- Current admin email: `abhijeet18012001@gmail.com` (hardcoded in server/routes.ts line 124 and netlify/functions/api.ts)
+- To change admin email, update the email check in both files
+
+## Netlify Deployment
+
+**Setup Steps:**
+1. Connect your GitHub repository to Netlify
+2. Add environment variables in Netlify dashboard (Site settings > Environment variables):
+   - `MONGODB_URI` - Your MongoDB connection string
+   - `RESEND_API_KEY` - Your Resend API key
+3. Deploy the site
+
+**Build Settings:**
+- Build command: `npm run build`
+- Publish directory: `dist/public`
+- Functions directory: `netlify/functions`
+
+**Important Notes:**
+- File uploads require external storage (Cloudinary, AWS S3, etc.) for Netlify deployment
+- The current local file storage only works on Replit
+- For production Netlify deployment, integrate cloud storage for image uploads
