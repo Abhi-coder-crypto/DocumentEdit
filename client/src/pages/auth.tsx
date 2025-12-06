@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/lib/auth-context";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ArrowRight, CheckCircle2, Shield } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -46,14 +46,8 @@ export default function AuthPage() {
     if (success) {
       setLocation("/");
     } else {
-      otpForm.setError("otp", { message: "Invalid OTP. Try 123456" });
+      otpForm.setError("otp", { message: "Invalid OTP. Please try again." });
     }
-  };
-
-  // Helper to auto-fill admin credentials for demo
-  const fillAdminDemo = () => {
-    loginForm.setValue("fullName", "System Admin");
-    loginForm.setValue("email", "admin@portal.com");
   };
 
   return (
@@ -128,13 +122,6 @@ export default function AuthPage() {
                       </Button>
                     </form>
                   </Form>
-
-                  <div className="mt-6 pt-6 border-t flex justify-center">
-                     <Button variant="ghost" size="sm" onClick={fillAdminDemo} className="text-xs text-muted-foreground hover:text-primary">
-                       <Shield className="w-3 h-3 mr-1" />
-                       Fill Admin Credentials (Demo)
-                     </Button>
-                  </div>
                 </motion.div>
               ) : (
                 <motion.div
@@ -153,14 +140,14 @@ export default function AuthPage() {
                             <FormLabel>One-Time Password</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder="123456" 
+                                placeholder="Enter code" 
                                 maxLength={6} 
                                 className="bg-white text-center text-lg tracking-[0.5em] font-mono" 
                                 {...field} 
                               />
                             </FormControl>
                             <CardDescription className="text-xs text-center pt-2">
-                              Check the server console for your OTP code
+                              Check your email for the verification code
                             </CardDescription>
                             <FormMessage />
                           </FormItem>

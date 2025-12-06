@@ -121,7 +121,6 @@ export default function AdminDashboard() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <span className="font-bold text-xl">Admin Portal</span>
-            <Badge variant="secondary" className="bg-slate-800 text-slate-300 border-none">v1.0</Badge>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-sm text-right hidden sm:block">
