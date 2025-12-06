@@ -3,9 +3,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/lib/auth-context";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2, Shield, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -21,7 +21,11 @@ const otpSchema = z.object({
   otp: z.string().length(6, "OTP must be 6 digits"),
 });
 
-export default function AuthPage() {
+interface AuthPageProps {
+  loginType?: 'client' | 'admin';
+}
+
+function AuthPageContent({ loginType = 'client' }: AuthPageProps) {
   const [step, setStep] = useState<'login' | 'otp'>('login');
   const { login, verifyOtp, isLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -44,15 +48,21 @@ export default function AuthPage() {
   const onOtpSubmit = async (values: z.infer<typeof otpSchema>) => {
     const success = await verifyOtp(values.otp);
     if (success) {
-      setLocation("/");
+      setLocation(loginType === 'admin' ? "/admin" : "/");
     } else {
       otpForm.setError("otp", { message: "Invalid OTP. Please try again." });
     }
   };
 
+  const isAdmin = loginType === 'admin';
+  const Icon = isAdmin ? Shield : User;
+  const title = isAdmin ? 'Admin Portal' : 'Client Portal';
+  const subtitle = isAdmin 
+    ? 'Sign in to manage image requests' 
+    : 'Sign in to upload and download images';
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 relative overflow-hidden">
-      {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
         <img 
           src={bgImage} 
@@ -68,13 +78,18 @@ export default function AuthPage() {
         className="relative z-10 w-full max-w-md px-4"
       >
         <Card className="border-none shadow-xl bg-white/90 backdrop-blur-xl">
-          <CardHeader className="space-y-1 text-center pb-8">
+          <CardHeader className="space-y-1 text-center pb-6">
+            <div className="flex justify-center mb-2">
+              <div className={`p-3 rounded-full ${isAdmin ? 'bg-amber-100' : 'bg-blue-100'}`}>
+                <Icon className={`h-6 w-6 ${isAdmin ? 'text-amber-600' : 'text-blue-600'}`} />
+              </div>
+            </div>
             <CardTitle className="text-2xl font-bold tracking-tight">
-              {step === 'login' ? 'Welcome Back' : 'Verify Identity'}
+              {step === 'login' ? title : 'Verify Identity'}
             </CardTitle>
             <CardDescription>
               {step === 'login' 
-                ? 'Enter your details to access the portal' 
+                ? subtitle 
                 : 'Enter the 6-digit code sent to your email'}
             </CardDescription>
           </CardHeader>
@@ -96,7 +111,12 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Full Name</FormLabel>
                             <FormControl>
-                              <Input placeholder="John Doe" {...field} className="bg-white" />
+                              <Input 
+                                placeholder="John Doe" 
+                                {...field} 
+                                className="bg-white" 
+                                data-testid="input-fullname"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -109,19 +129,49 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel>Email Address</FormLabel>
                             <FormControl>
-                              <Input placeholder="john@example.com" {...field} className="bg-white" />
+                              <Input 
+                                placeholder="john@example.com" 
+                                {...field} 
+                                className="bg-white" 
+                                data-testid="input-email"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      <Button type="submit" className="w-full" disabled={isLoading}>
+                      <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-send-otp">
                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Send Login Code
                         {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
                       </Button>
                     </form>
                   </Form>
+                  
+                  <div className="mt-6 pt-4 border-t text-center">
+                    <p className="text-sm text-muted-foreground">
+                      {isAdmin ? 'Not an admin?' : 'Are you an admin?'}
+                    </p>
+                    <Link href={isAdmin ? '/auth/client' : '/auth/admin'}>
+                      <Button 
+                        variant="ghost" 
+                        className="mt-2 text-sm"
+                        data-testid="button-switch-portal"
+                      >
+                        {isAdmin ? (
+                          <>
+                            <User className="mr-2 h-4 w-4" />
+                            Go to Client Portal
+                          </>
+                        ) : (
+                          <>
+                            <Shield className="mr-2 h-4 w-4" />
+                            Go to Admin Portal
+                          </>
+                        )}
+                      </Button>
+                    </Link>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div
@@ -143,7 +193,8 @@ export default function AuthPage() {
                                 placeholder="Enter code" 
                                 maxLength={6} 
                                 className="bg-white text-center text-lg tracking-[0.5em] font-mono" 
-                                {...field} 
+                                {...field}
+                                data-testid="input-otp"
                               />
                             </FormControl>
                             <CardDescription className="text-xs text-center pt-2">
@@ -153,7 +204,7 @@ export default function AuthPage() {
                           </FormItem>
                         )}
                       />
-                      <Button type="submit" className="w-full" disabled={isLoading}>
+                      <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-verify-otp">
                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Verify & Login
                         {!isLoading && <CheckCircle2 className="ml-2 h-4 w-4" />}
@@ -163,6 +214,7 @@ export default function AuthPage() {
                         variant="ghost" 
                         className="w-full text-muted-foreground"
                         onClick={() => setStep('login')}
+                        data-testid="button-back-to-login"
                       >
                         Back to Login
                       </Button>
@@ -176,4 +228,16 @@ export default function AuthPage() {
       </motion.div>
     </div>
   );
+}
+
+export function ClientAuthPage() {
+  return <AuthPageContent loginType="client" />;
+}
+
+export function AdminAuthPage() {
+  return <AuthPageContent loginType="admin" />;
+}
+
+export default function AuthPage() {
+  return <AuthPageContent loginType="client" />;
 }

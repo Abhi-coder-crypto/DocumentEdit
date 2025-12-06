@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { LogOut, Download, Upload, Check, Search, Filter, RefreshCw } from "lucide-react";
+import { LogOut, Download, Upload, Check, Search, Filter, RefreshCw, Wifi, WifiOff, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
+import { useWebSocket, WSMessage } from "@/hooks/use-websocket";
+import { Link } from "wouter";
 
 interface ImageRequest {
   id: string;
@@ -33,6 +35,49 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+
+  const handleWebSocketMessage = useCallback((message: WSMessage) => {
+    if (message.type === 'new_image_upload') {
+      const newRequest = message.data;
+      setRequests(prev => {
+        const exists = prev.some(req => String(req.id) === String(newRequest.id));
+        if (exists) return prev;
+        return [...prev, {
+          id: String(newRequest.id),
+          userId: String(newRequest.userId),
+          userEmail: newRequest.userEmail,
+          userFullName: newRequest.userFullName,
+          originalFileName: newRequest.originalFileName,
+          originalFilePath: newRequest.originalFilePath,
+          status: 'pending' as const,
+          uploadedAt: newRequest.uploadedAt,
+        }];
+      });
+      toast({
+        title: "New Image Upload",
+        description: `${newRequest.userFullName} uploaded "${newRequest.originalFileName}"`,
+      });
+    } else if (message.type === 'image_edited') {
+      const editedRequest = message.data;
+      setRequests(prev => prev.map(req => 
+        String(req.id) === String(editedRequest.id) 
+          ? { 
+              ...req, 
+              status: 'completed' as const, 
+              editedFileName: editedRequest.editedFileName, 
+              editedFilePath: editedRequest.editedFilePath, 
+              completedAt: editedRequest.completedAt 
+            }
+          : req
+      ));
+      toast({
+        title: "Image Edited",
+        description: `Request for "${editedRequest.originalFileName}" has been completed`,
+      });
+    }
+  }, [toast]);
+
+  const { isConnected } = useWebSocket(handleWebSocketMessage);
 
   const fetchRequests = useCallback(async () => {
     setIsLoading(true);
@@ -123,10 +168,23 @@ export default function AdminDashboard() {
             <span className="font-bold text-xl">Admin Portal</span>
           </div>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2" title={isConnected ? 'Real-time updates active' : 'Reconnecting...'}>
+              {isConnected ? (
+                <Wifi className="h-4 w-4 text-green-400" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-slate-400 animate-pulse" />
+              )}
+            </div>
             <div className="text-sm text-right hidden sm:block">
               <p className="font-medium">{user?.fullName}</p>
               <p className="text-xs text-slate-400">Administrator</p>
             </div>
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="text-white hover:bg-slate-800 gap-2" data-testid="link-client-portal">
+                <User className="h-4 w-4" />
+                Client View
+              </Button>
+            </Link>
             <Button variant="ghost" size="icon" onClick={logout} className="text-white hover:bg-slate-800" data-testid="button-logout">
               <LogOut className="h-5 w-5" />
             </Button>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, CheckCircle2, Clock, Download, LogOut, Image as ImageIcon, AlertCircle, ShieldCheck, RefreshCw } from "lucide-react";
+import { Upload, CheckCircle2, Clock, Download, LogOut, Image as ImageIcon, AlertCircle, ShieldCheck, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useWebSocket, WSMessage } from "@/hooks/use-websocket";
 
 interface ImageRequest {
   id: string;
@@ -31,6 +32,29 @@ export default function UserDashboard() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleWebSocketMessage = useCallback((message: WSMessage) => {
+    if (message.type === 'image_edited') {
+      const editedRequest = message.data;
+      setRequests(prev => prev.map(req => 
+        req.id === editedRequest.id 
+          ? { 
+              ...req, 
+              status: 'completed' as const,
+              editedFileName: editedRequest.editedFileName,
+              editedFilePath: editedRequest.editedFilePath,
+              completedAt: editedRequest.completedAt,
+            }
+          : req
+      ));
+      toast({
+        title: "Image Ready!",
+        description: `Your image "${editedRequest.originalFileName}" has been edited and is ready for download.`,
+      });
+    }
+  }, [toast]);
+
+  const { isConnected } = useWebSocket(handleWebSocketMessage);
 
   const fetchRequests = useCallback(async () => {
     if (!user?.id) return;
@@ -123,6 +147,13 @@ export default function UserDashboard() {
             <span className="font-bold text-lg tracking-tight">BG Remover</span>
           </div>
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2" title={isConnected ? 'Real-time updates active' : 'Reconnecting...'}>
+              {isConnected ? (
+                <Wifi className="h-4 w-4 text-green-500" />
+              ) : (
+                <WifiOff className="h-4 w-4 text-muted-foreground animate-pulse" />
+              )}
+            </div>
             <div className="text-sm text-right hidden sm:block">
               <p className="font-medium">{user?.fullName}</p>
               <p className="text-xs text-muted-foreground">{user?.email}</p>

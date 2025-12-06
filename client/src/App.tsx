@@ -4,7 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 
-import AuthPage from "@/pages/auth";
+import { ClientAuthPage, AdminAuthPage } from "@/pages/auth";
 import UserDashboard from "@/pages/user-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
 import NotFound from "@/pages/not-found";
@@ -12,10 +12,10 @@ import NotFound from "@/pages/not-found";
 function ProtectedRoute({ component: Component, adminOnly = false }: { component: React.ComponentType, adminOnly?: boolean }) {
   const { user, isLoading } = useAuth();
 
-  if (isLoading) return null; // Or a loading spinner
+  if (isLoading) return null;
 
   if (!user) {
-    return <Redirect to="/auth" />;
+    return <Redirect to={adminOnly ? "/auth/admin" : "/auth/client"} />;
   }
 
   if (adminOnly && user.role !== 'admin') {
@@ -28,7 +28,11 @@ function ProtectedRoute({ component: Component, adminOnly = false }: { component
 function Router() {
   return (
     <Switch>
-      <Route path="/auth" component={AuthPage} />
+      <Route path="/auth/client" component={ClientAuthPage} />
+      <Route path="/auth/admin" component={AdminAuthPage} />
+      <Route path="/auth">
+        {() => <Redirect to="/auth/client" />}
+      </Route>
       
       <Route path="/">
         {() => <ProtectedRoute component={UserDashboard} />}

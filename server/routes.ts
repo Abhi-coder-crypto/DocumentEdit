@@ -6,6 +6,7 @@ import path from "path";
 import { nanoid } from "nanoid";
 import { log } from "./index";
 import { sendOTPEmail, sendEditedImageNotification } from "./email";
+import { notifyNewImageUpload, notifyImageEdited } from "./websocket";
 
 // Configure multer for file uploads
 const uploadStorage = multer.diskStorage({
@@ -163,6 +164,18 @@ export async function registerRoutes(
         status: 'pending',
       });
 
+      // Notify admins via WebSocket
+      notifyNewImageUpload({
+        id: imageRequest._id?.toString() || '',
+        userId: imageRequest.userId,
+        userEmail: imageRequest.userEmail,
+        userFullName: imageRequest.userFullName,
+        originalFileName: imageRequest.originalFileName,
+        originalFilePath: imageRequest.originalFilePath,
+        status: imageRequest.status,
+        uploadedAt: imageRequest.uploadedAt,
+      });
+
       res.json({
         message: 'Image uploaded successfully',
         request: {
@@ -273,6 +286,21 @@ export async function registerRoutes(
         updatedRequest.userFullName,
         updatedRequest.originalFileName
       );
+
+      // Notify user via WebSocket
+      notifyImageEdited({
+        id: updatedRequest._id?.toString() || '',
+        userId: updatedRequest.userId,
+        userEmail: updatedRequest.userEmail,
+        userFullName: updatedRequest.userFullName,
+        originalFileName: updatedRequest.originalFileName,
+        originalFilePath: updatedRequest.originalFilePath,
+        editedFileName: updatedRequest.editedFileName || '',
+        editedFilePath: updatedRequest.editedFilePath || '',
+        status: updatedRequest.status,
+        uploadedAt: updatedRequest.uploadedAt,
+        completedAt: updatedRequest.completedAt || new Date(),
+      });
 
       res.json({
         message: 'Edited image uploaded successfully',
