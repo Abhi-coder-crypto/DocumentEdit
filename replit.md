@@ -109,3 +109,11 @@ Preferred communication style: Simple, everyday language.
 - Drizzle config present but application uses MongoDB driver directly (not PostgreSQL)
 - Environment expects `DATABASE_URL` (PostgreSQL) but application uses `MONGODB_URI`
 - Future migration to PostgreSQL with Drizzle ORM is architecturally supported
+
+**Required Secrets (configured via Replit Secrets):**
+- `MONGODB_URI` - MongoDB connection string
+- `RESEND_API_KEY` - Resend API key for sending OTP emails
+
+**Admin Configuration:**
+- Current admin email: `abhijeet18012001@gmail.com` (hardcoded in server/routes.ts line 124)
+- To change admin email, update the email check in server/routes.ts

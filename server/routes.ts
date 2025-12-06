@@ -118,7 +118,7 @@ export async function registerRoutes(
         user = await storage.createUser({
           email: session.email,
           fullName: session.fullName,
-          role: email === 'admin@portal.com' ? 'admin' : 'user',
+          role: email === 'abhijeet18012001@gmail.com' ? 'admin' : 'user',
         });
       }
 
