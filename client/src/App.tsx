@@ -1,16 +1,43 @@
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { Switch, Route, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+
+import AuthPage from "@/pages/auth";
+import UserDashboard from "@/pages/user-dashboard";
+import AdminDashboard from "@/pages/admin-dashboard";
 import NotFound from "@/pages/not-found";
+
+function ProtectedRoute({ component: Component, adminOnly = false }: { component: React.ComponentType, adminOnly?: boolean }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) return null; // Or a loading spinner
+
+  if (!user) {
+    return <Redirect to="/auth" />;
+  }
+
+  if (adminOnly && user.role !== 'admin') {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
 
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/auth" component={AuthPage} />
+      
+      <Route path="/">
+        {() => <ProtectedRoute component={UserDashboard} />}
+      </Route>
+      
+      <Route path="/admin">
+        {() => <ProtectedRoute component={AdminDashboard} adminOnly />}
+      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );
@@ -19,10 +46,10 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
+      <AuthProvider>
         <Router />
-      </TooltipProvider>
+        <Toaster />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
