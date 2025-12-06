@@ -41,8 +41,10 @@ function AuthPageContent({ loginType = 'client' }: AuthPageProps) {
   });
 
   const onLoginSubmit = async (values: z.infer<typeof loginSchema>) => {
-    await login(values.email, values.fullName);
-    setStep('otp');
+    const success = await login(values.email, values.fullName, loginType);
+    if (success) {
+      setStep('otp');
+    }
   };
 
   const onOtpSubmit = async (values: z.infer<typeof otpSchema>) => {

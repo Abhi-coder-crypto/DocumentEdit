@@ -47,13 +47,21 @@ export async function registerRoutes(
   
   // ===== AUTH ROUTES =====
   
+  // Admin email constant
+  const ADMIN_EMAIL = 'abhijeet18012001@gmail.com';
+
   // Request OTP
   app.post('/api/auth/request-otp', async (req, res) => {
     try {
-      const { email, fullName } = req.body;
+      const { email, fullName, loginType } = req.body;
       
       if (!email || !fullName) {
         return res.status(400).json({ message: 'Email and full name are required' });
+      }
+
+      // For admin login, only allow the specific admin email
+      if (loginType === 'admin' && email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+        return res.status(400).json({ message: 'Invalid email' });
       }
 
       // Generate OTP
@@ -72,9 +80,7 @@ export async function registerRoutes(
       const emailSent = await sendOTPEmail(email, otp, fullName);
 
       res.json({ 
-        message: emailSent ? 'OTP sent to your email' : 'OTP generated (email delivery issue - use the code shown)',
-        // Always include OTP until email is properly configured
-        otp,
+        message: emailSent ? 'OTP sent to your email' : 'Failed to send OTP. Please try again.',
         emailSent,
       });
     } catch (error: any) {

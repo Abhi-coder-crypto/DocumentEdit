@@ -10,7 +10,7 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, fullName: string) => Promise<void>;
+  login: (email: string, fullName: string, loginType?: 'client' | 'admin') => Promise<boolean>;
   verifyOtp: (otp: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
@@ -24,13 +24,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [pendingLogin, setPendingLogin] = useState<{ email: string; fullName: string } | null>(null);
   const { toast } = useToast();
 
-  const login = async (email: string, fullName: string) => {
+  const login = async (email: string, fullName: string, loginType: 'client' | 'admin' = 'client'): Promise<boolean> => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/auth/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, fullName }),
+        body: JSON.stringify({ email, fullName, loginType }),
       });
 
       const data = await response.json();
@@ -40,27 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setPendingLogin({ email, fullName });
-      
-      if (data.otp) {
-        toast({
-          title: "Your Login Code",
-          description: `Your OTP is: ${data.otp}`,
-          duration: 60000,
-        });
-      } else {
-        toast({
-          title: "OTP Sent",
-          description: `We sent a verification code to ${email}`,
-        });
-      }
+      setIsLoading(false);
+      return true;
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || 'Failed to send OTP',
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
+      return false;
     }
   };
 
@@ -78,11 +67,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
 
       if (!response.ok) {
-        toast({
-          title: "Verification Failed",
-          description: data.message || 'Invalid OTP',
-          variant: "destructive",
-        });
         setIsLoading(false);
         return false;
       }
@@ -92,11 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return true;
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || 'Failed to verify OTP',
-        variant: "destructive",
-      });
       setIsLoading(false);
       return false;
     }
