@@ -2,6 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { initializeDatabase } from "./db-init";
+import fs from "fs";
 
 const app = express();
 const httpServer = createServer(app);
@@ -60,6 +62,23 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Ensure upload directories exist
+  const uploadDirs = ['uploads/original', 'uploads/edited'];
+  for (const dir of uploadDirs) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      log(`Created directory: ${dir}`);
+    }
+  }
+
+  // Initialize MongoDB collections and indexes
+  try {
+    await initializeDatabase();
+    log("Database initialized successfully");
+  } catch (error: any) {
+    log(`Database initialization warning: ${error.message}`, "database");
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
