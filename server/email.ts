@@ -1,24 +1,30 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { log } from './index';
 
-const resend = process.env.RESEND_API_KEY 
-  ? new Resend(process.env.RESEND_API_KEY)
+const transporter = process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD
+  ? nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    })
   : null;
 
-// Default sender - for production, update with your verified domain
-const FROM_EMAIL = 'BG Remover Portal <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.GMAIL_USER || 'noreply@example.com';
+const APP_NAME = 'BG Remover Portal';
 
 export async function sendOTPEmail(email: string, otp: string, fullName: string): Promise<boolean> {
-  if (!resend) {
-    log('Resend API key not configured, skipping OTP email', 'email');
+  if (!transporter) {
+    log('Gmail credentials not configured, skipping OTP email', 'email');
     return false;
   }
   
   try {
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
+    const info = await transporter.sendMail({
+      from: `${APP_NAME} <${FROM_EMAIL}>`,
       to: email,
-      subject: 'Your Login Code - BG Remover Portal',
+      subject: `Your Login Code - ${APP_NAME}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -41,12 +47,7 @@ export async function sendOTPEmail(email: string, otp: string, fullName: string)
       `,
     });
 
-    if (error) {
-      log(`Failed to send OTP email: ${error.message}`, 'email');
-      return false;
-    }
-
-    log(`OTP email sent to ${email} (ID: ${data?.id})`, 'email');
+    log(`OTP email sent to ${email} (ID: ${info.messageId})`, 'email');
     return true;
   } catch (error: any) {
     log(`Error sending OTP email: ${error.message}`, 'email');
@@ -59,16 +60,16 @@ export async function sendEditedImageNotification(
   fullName: string, 
   originalFileName: string
 ): Promise<boolean> {
-  if (!resend) {
-    log('Resend API key not configured, skipping notification email', 'email');
+  if (!transporter) {
+    log('Gmail credentials not configured, skipping notification email', 'email');
     return false;
   }
   
   try {
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
+    const info = await transporter.sendMail({
+      from: `${APP_NAME} <${FROM_EMAIL}>`,
       to: email,
-      subject: 'Your Image is Ready! - BG Remover Portal',
+      subject: `Your Image is Ready! - ${APP_NAME}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -89,19 +90,14 @@ export async function sendEditedImageNotification(
             <p style="color: #3f3f46; font-size: 14px; margin: 0 0 24px 0;">
               Log in to your account to download the edited image.
             </p>
-            <p style="color: #a1a1aa; font-size: 12px; margin: 0;">Thank you for using BG Remover Portal!</p>
+            <p style="color: #a1a1aa; font-size: 12px; margin: 0;">Thank you for using ${APP_NAME}!</p>
           </div>
         </body>
         </html>
       `,
     });
 
-    if (error) {
-      log(`Failed to send notification email: ${error.message}`, 'email');
-      return false;
-    }
-
-    log(`Notification email sent to ${email} (ID: ${data?.id})`, 'email');
+    log(`Notification email sent to ${email} (ID: ${info.messageId})`, 'email');
     return true;
   } catch (error: any) {
     log(`Error sending notification email: ${error.message}`, 'email');
