@@ -230,6 +230,13 @@ export async function registerRoutes(
       }
 
       const filePath = path.join(process.cwd(), 'uploads', type, filename);
+      
+      // Check if file exists before attempting download
+      const fs = require('fs');
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: 'File not found. It may have been deleted or moved.' });
+      }
+      
       res.download(filePath);
     } catch (error: any) {
       log(`Error downloading file: ${error.message}`, 'error');

@@ -160,6 +160,11 @@ export default function AdminDashboard() {
     window.open(`/api/images/download/original/${filename}`, '_blank');
   };
 
+  const downloadEdited = (filePath: string) => {
+    const filename = filePath.split('/').pop();
+    window.open(`/api/images/download/edited/${filename}`, '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-slate-900 text-white sticky top-0 z-50">
@@ -263,16 +268,27 @@ export default function AdminDashboard() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 flex-wrap">
                           <Button 
                             variant="outline" 
                             size="sm" 
                             onClick={() => downloadOriginal(req.originalFilePath)}
-                            data-testid={`button-download-${req.id}`}
+                            data-testid={`button-download-original-${req.id}`}
                           >
                             <Download className="h-4 w-4 mr-2" />
                             Original
                           </Button>
+                          {req.status === 'completed' && req.editedFilePath && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => downloadEdited(req.editedFilePath!)}
+                              data-testid={`button-download-edited-${req.id}`}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Edited
+                            </Button>
+                          )}
                           {req.status === 'pending' && (
                             <Button 
                               size="sm" 
