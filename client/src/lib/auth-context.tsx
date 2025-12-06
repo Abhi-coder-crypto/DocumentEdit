@@ -41,10 +41,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setPendingLogin({ email, fullName });
       
-      toast({
-        title: "OTP Sent",
-        description: `We sent a verification code to ${email}`,
-      });
+      if (data.otp) {
+        toast({
+          title: "Your Login Code",
+          description: `Your OTP is: ${data.otp}`,
+          duration: 60000,
+        });
+      } else {
+        toast({
+          title: "OTP Sent",
+          description: `We sent a verification code to ${email}`,
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Error",

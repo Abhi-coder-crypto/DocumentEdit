@@ -68,12 +68,13 @@ export async function registerRoutes(
       });
 
       // Send OTP via email
-      await sendOTPEmail(email, otp, fullName);
+      const emailSent = await sendOTPEmail(email, otp, fullName);
 
       res.json({ 
-        message: 'OTP sent successfully',
-        // In development, include OTP in response for easier testing
-        ...(process.env.NODE_ENV === 'development' && { otp })
+        message: emailSent ? 'OTP sent to your email' : 'OTP generated (email delivery issue - use the code shown)',
+        // Always include OTP until email is properly configured
+        otp,
+        emailSent,
       });
     } catch (error: any) {
       log(`Error in request-otp: ${error.message}`, 'error');
