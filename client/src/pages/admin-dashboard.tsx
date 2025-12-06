@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { LogOut, Download, Upload, Check, Search, Filter, RefreshCw, Wifi, WifiOff, User } from "lucide-react";
+import { LogOut, Download, Upload, Check, Search, Filter, RefreshCw, Wifi, WifiOff, User, Image, Clock, CheckCircle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
 import { useWebSocket, WSMessage } from "@/hooks/use-websocket";
 import { Link } from "wouter";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 interface ImageRequest {
   id: string;
@@ -110,6 +111,10 @@ export default function AdminDashboard() {
     req.userEmail?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const completedCount = requests.filter(r => r.status === 'completed').length;
+  const uniqueUsers = new Set(requests.map(r => r.userId)).size;
+
   const onDrop = async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0 || !selectedRequest) return;
 
@@ -165,32 +170,74 @@ export default function AdminDashboard() {
     window.open(`/api/images/download/edited/${filename}`, '_blank');
   };
 
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="bg-slate-900 text-white sticky top-0 z-50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <span className="font-bold text-xl">Admin Portal</span>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
+      {/* Header */}
+      <header className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white sticky top-0 z-50 shadow-lg">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md">
+              <Image className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <span className="font-bold text-lg">Admin Portal</span>
+              <p className="text-xs text-slate-400 hidden sm:block">Background Removal System</p>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2" title={isConnected ? 'Real-time updates active' : 'Reconnecting...'}>
+          
+          <div className="flex items-center gap-3">
+            <div 
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/50" 
+              title={isConnected ? 'Real-time updates active' : 'Reconnecting...'}
+            >
               {isConnected ? (
-                <Wifi className="h-4 w-4 text-green-400" />
+                <>
+                  <Wifi className="h-3.5 w-3.5 text-green-400" />
+                  <span className="text-xs text-green-400 hidden sm:inline">Live</span>
+                </>
               ) : (
-                <WifiOff className="h-4 w-4 text-slate-400 animate-pulse" />
+                <>
+                  <WifiOff className="h-3.5 w-3.5 text-slate-400 animate-pulse" />
+                  <span className="text-xs text-slate-400 hidden sm:inline">Connecting...</span>
+                </>
               )}
             </div>
-            <div className="text-sm text-right hidden sm:block">
-              <p className="font-medium">{user?.fullName}</p>
-              <p className="text-xs text-slate-400">Administrator</p>
+            
+            <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-800/30">
+              <Avatar className="h-8 w-8 border-2 border-indigo-400/50">
+                <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-medium">
+                  {user?.fullName ? getInitials(user.fullName) : 'A'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="text-right">
+                <p className="text-sm font-medium">{user?.fullName}</p>
+                <p className="text-xs text-indigo-300">Administrator</p>
+              </div>
             </div>
+            
             <Link href="/">
-              <Button variant="ghost" size="sm" className="text-white hover:bg-slate-800 gap-2" data-testid="link-client-portal">
+              <Button variant="ghost" size="sm" className="text-white hover:bg-slate-700/50 gap-2" data-testid="link-client-portal">
                 <User className="h-4 w-4" />
-                Client View
+                <span className="hidden sm:inline">Client View</span>
               </Button>
             </Link>
-            <Button variant="ghost" size="icon" onClick={logout} className="text-white hover:bg-slate-800" data-testid="button-logout">
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={logout} 
+              className="text-white hover:bg-red-500/20 hover:text-red-300" 
+              data-testid="button-logout"
+            >
               <LogOut className="h-5 w-5" />
             </Button>
           </div>
@@ -198,21 +245,87 @@ export default function AdminDashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-md overflow-visible">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Requests</p>
+                  <p className="text-2xl font-bold text-foreground" data-testid="text-total-requests">{requests.length}</p>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                  <Image className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-md overflow-visible">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-2xl font-bold text-amber-600" data-testid="text-pending-count">{pendingCount}</p>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
+                  <Clock className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-md overflow-visible">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Completed</p>
+                  <p className="text-2xl font-bold text-green-600" data-testid="text-completed-count">{completedCount}</p>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg">
+                  <CheckCircle className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-md overflow-visible">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm text-muted-foreground">Unique Users</p>
+                  <p className="text-2xl font-bold text-indigo-600" data-testid="text-unique-users">{uniqueUsers}</p>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-600 flex items-center justify-center shadow-lg">
+                  <Users className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Header and Search */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">User Requests</h1>
-            <p className="text-slate-500">Manage and process background removal requests.</p>
+            <h1 className="text-2xl font-bold text-foreground">User Requests</h1>
+            <p className="text-muted-foreground">Manage and process background removal requests</p>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
-            <Button variant="outline" onClick={fetchRequests} disabled={isLoading} className="bg-white" data-testid="button-refresh">
+            <Button 
+              variant="outline" 
+              onClick={fetchRequests} 
+              disabled={isLoading} 
+              className="bg-white/80 dark:bg-slate-800/80 backdrop-blur" 
+              data-testid="button-refresh"
+            >
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
             <div className="relative w-full md:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search users..." 
-                className="pl-9 bg-white"
+                className="pl-10 bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 data-testid="input-search"
@@ -221,50 +334,78 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <Card className="border-none shadow-md">
+        {/* Requests Table */}
+        <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-lg overflow-hidden">
           <CardContent className="p-0">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50 hover:bg-slate-50">
-                  <TableHead>User</TableHead>
-                  <TableHead>File</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="bg-slate-50/80 dark:bg-slate-700/50 hover:bg-slate-50/80 dark:hover:bg-slate-700/50">
+                  <TableHead className="font-semibold">User</TableHead>
+                  <TableHead className="font-semibold">File</TableHead>
+                  <TableHead className="font-semibold">Date</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="text-right font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
-                      <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                      <p className="mt-2 text-muted-foreground">Loading requests...</p>
+                    <TableCell colSpan={5} className="text-center py-12">
+                      <RefreshCw className="h-8 w-8 animate-spin mx-auto text-indigo-500" />
+                      <p className="mt-3 text-muted-foreground">Loading requests...</p>
                     </TableCell>
                   </TableRow>
                 ) : filteredRequests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No requests found
+                    <TableCell colSpan={5} className="text-center py-12">
+                      <div className="h-16 w-16 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-4">
+                        <Image className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground">No requests found</p>
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredRequests.map((req) => (
-                    <TableRow key={req.id} data-testid={`row-request-${req.id}`}>
+                    <TableRow 
+                      key={req.id} 
+                      className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors"
+                      data-testid={`row-request-${req.id}`}
+                    >
                       <TableCell>
-                        <div className="font-medium">{req.userFullName}</div>
-                        <div className="text-xs text-muted-foreground">{req.userEmail}</div>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-600">
+                            <AvatarFallback className="bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium">
+                              {req.userFullName ? getInitials(req.userFullName) : 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-foreground">{req.userFullName}</p>
+                            <p className="text-xs text-muted-foreground">{req.userEmail}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <p className="text-sm text-muted-foreground truncate max-w-[200px]" title={req.originalFileName}>
+                          {req.originalFileName}
+                        </p>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {req.originalFileName}
+                        {new Date(req.uploadedAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>{new Date(req.uploadedAt).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Badge 
                           variant={req.status === 'completed' ? 'default' : 'secondary'}
-                          className={req.status === 'completed' ? 'bg-green-500 hover:bg-green-600' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}
+                          className={req.status === 'completed' 
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0' 
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0'
+                          }
                           data-testid={`badge-status-${req.id}`}
                         >
-                          {req.status === 'completed' ? 'Completed' : 'Pending'}
+                          {req.status === 'completed' ? (
+                            <><CheckCircle className="h-3 w-3 mr-1" /> Completed</>
+                          ) : (
+                            <><Clock className="h-3 w-3 mr-1" /> Pending</>
+                          )}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -273,9 +414,10 @@ export default function AdminDashboard() {
                             variant="outline" 
                             size="sm" 
                             onClick={() => downloadOriginal(req.originalFilePath)}
+                            className="bg-white/50 dark:bg-slate-700/50"
                             data-testid={`button-download-original-${req.id}`}
                           >
-                            <Download className="h-4 w-4 mr-2" />
+                            <Download className="h-4 w-4 mr-1.5" />
                             Original
                           </Button>
                           {req.status === 'completed' && req.editedFilePath && (
@@ -283,9 +425,10 @@ export default function AdminDashboard() {
                               variant="outline" 
                               size="sm" 
                               onClick={() => downloadEdited(req.editedFilePath!)}
+                              className="bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800"
                               data-testid={`button-download-edited-${req.id}`}
                             >
-                              <Download className="h-4 w-4 mr-2" />
+                              <Download className="h-4 w-4 mr-1.5" />
                               Edited
                             </Button>
                           )}
@@ -293,9 +436,10 @@ export default function AdminDashboard() {
                             <Button 
                               size="sm" 
                               onClick={() => setSelectedRequest(req)}
+                              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-md"
                               data-testid={`button-upload-edit-${req.id}`}
                             >
-                              <Upload className="h-4 w-4 mr-2" />
+                              <Upload className="h-4 w-4 mr-1.5" />
                               Upload Edit
                             </Button>
                           )}
@@ -310,25 +454,45 @@ export default function AdminDashboard() {
         </Card>
       </main>
 
+      {/* Upload Dialog */}
       <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && setSelectedRequest(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Upload Edited Image</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <Upload className="h-4 w-4 text-white" />
+              </div>
+              Upload Edited Image
+            </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label>Request Details</Label>
-              <div className="text-sm text-muted-foreground">
-                <p><strong>User:</strong> {selectedRequest?.userFullName}</p>
-                <p><strong>Email:</strong> {selectedRequest?.userEmail}</p>
-                <p><strong>Original File:</strong> {selectedRequest?.originalFileName}</p>
-              </div>
-            </div>
+            <Card className="bg-slate-50 dark:bg-slate-800/50 border-0">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback className="bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-sm">
+                      {selectedRequest?.userFullName ? getInitials(selectedRequest.userFullName) : 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{selectedRequest?.userFullName}</p>
+                    <p className="text-xs text-muted-foreground">{selectedRequest?.userEmail}</p>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs text-muted-foreground">Original File</p>
+                  <p className="text-sm font-medium truncate">{selectedRequest?.originalFileName}</p>
+                </div>
+              </CardContent>
+            </Card>
             
             <div 
               {...getRootProps()}
-              className={`p-8 border-2 border-dashed rounded-lg text-center space-y-2 cursor-pointer transition-colors
-                ${isDragActive ? 'border-primary bg-primary/5' : 'hover:bg-slate-50'}
+              className={`p-8 border-2 border-dashed rounded-xl text-center space-y-3 cursor-pointer transition-all
+                ${isDragActive 
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
+                  : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }
                 ${isUploading ? 'opacity-50 pointer-events-none' : ''}
               `}
               data-testid="dropzone-edited"
@@ -336,14 +500,20 @@ export default function AdminDashboard() {
               <input {...getInputProps()} />
               {isUploading ? (
                 <>
-                  <RefreshCw className="mx-auto h-8 w-8 text-muted-foreground animate-spin" />
+                  <div className="h-14 w-14 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mx-auto">
+                    <RefreshCw className="h-7 w-7 text-indigo-600 dark:text-indigo-400 animate-spin" />
+                  </div>
                   <p className="text-sm font-medium">Uploading...</p>
                 </>
               ) : (
                 <>
-                  <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm font-medium">Click or drag to upload edited image</p>
-                  <p className="text-xs text-muted-foreground">PNG or JPG with transparent background</p>
+                  <div className="h-14 w-14 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mx-auto">
+                    <Upload className="h-7 w-7 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Click or drag to upload</p>
+                    <p className="text-xs text-muted-foreground">PNG or JPG with transparent background</p>
+                  </div>
                 </>
               )}
             </div>

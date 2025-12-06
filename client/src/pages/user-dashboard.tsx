@@ -2,13 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, CheckCircle2, Clock, Download, LogOut, Image as ImageIcon, AlertCircle, ShieldCheck, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { Upload, CheckCircle2, Clock, Download, LogOut, Image as ImageIcon, ShieldCheck, RefreshCw, Wifi, WifiOff, CloudUpload, FileImage, Calendar, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useWebSocket, WSMessage } from "@/hooks/use-websocket";
@@ -134,171 +133,282 @@ export default function UserDashboard() {
     window.open(`/api/images/download/${type}/${filename}`, '_blank');
   };
 
-  const latestRequest = requests.length > 0 ? requests[requests.length - 1] : null;
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
+  const completedCount = requests.filter(r => r.status === 'completed').length;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b sticky top-0 z-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100">
+      <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200/50 sticky top-0 z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="bg-primary/10 p-2 rounded-lg">
-              <ImageIcon className="h-5 w-5 text-primary" />
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-br from-blue-600 to-cyan-500 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+              <ImageIcon className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight">BG Remover</span>
+            <div>
+              <span className="font-bold text-lg tracking-tight text-slate-800">Cipla Portal</span>
+              <span className="hidden sm:inline text-slate-400 text-sm ml-2">Image Processing</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2" title={isConnected ? 'Real-time updates active' : 'Reconnecting...'}>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full" title={isConnected ? 'Real-time updates active' : 'Reconnecting...'}>
               {isConnected ? (
-                <Wifi className="h-4 w-4 text-green-500" />
+                <>
+                  <Wifi className="h-3.5 w-3.5 text-green-500" />
+                  <span className="text-xs text-green-600 font-medium hidden sm:inline">Live</span>
+                </>
               ) : (
-                <WifiOff className="h-4 w-4 text-muted-foreground animate-pulse" />
+                <>
+                  <WifiOff className="h-3.5 w-3.5 text-slate-400 animate-pulse" />
+                  <span className="text-xs text-slate-500 hidden sm:inline">Connecting...</span>
+                </>
               )}
             </div>
-            <div className="text-sm text-right hidden sm:block">
-              <p className="font-medium">{user?.fullName}</p>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
+            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-xl">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                {user?.fullName?.charAt(0).toUpperCase()}
+              </div>
+              <div className="text-sm">
+                <p className="font-medium text-slate-800">{user?.fullName}</p>
+                <p className="text-xs text-slate-500">{user?.email}</p>
+              </div>
             </div>
             
             {user?.role === 'admin' && (
               <Link href="/admin">
-                <Button variant="default" size="sm" className="gap-2" data-testid="link-admin-portal">
+                <Button variant="default" size="sm" className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90" data-testid="link-admin-portal">
                   <ShieldCheck className="h-4 w-4" />
-                  Admin Portal
+                  <span className="hidden sm:inline">Admin</span>
                 </Button>
               </Link>
             )}
 
-            <Button variant="ghost" size="icon" onClick={logout} data-testid="button-logout">
-              <LogOut className="h-5 w-5 text-muted-foreground" />
+            <Button variant="ghost" size="icon" onClick={logout} className="text-slate-500 hover:text-slate-700 hover:bg-slate-100" data-testid="button-logout">
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-5xl">
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight mb-2">Dashboard</h1>
-            <p className="text-muted-foreground">Manage your image requests and downloads.</p>
-          </div>
-          <Button variant="outline" onClick={fetchRequests} disabled={isLoading} data-testid="button-refresh">
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+      <main className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+          >
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-800 mb-1">
+                Welcome back, {user?.fullName?.split(' ')[0]}
+              </h1>
+              <p className="text-slate-500">Upload images and track your processing requests.</p>
+            </div>
+            <Button variant="outline" onClick={fetchRequests} disabled={isLoading} className="bg-white shadow-sm" data-testid="button-refresh">
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </motion.div>
         </div>
 
-        <Card className="border-dashed border-2 shadow-none bg-slate-50/50 mb-8">
-          <CardContent className="pt-6">
-            <div
-              {...getRootProps()}
-              className={`
-                min-h-[300px] flex flex-col items-center justify-center rounded-xl border-2 border-dashed 
-                transition-all duration-200 cursor-pointer relative overflow-hidden
-                ${isDragActive ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-primary/50 hover:bg-slate-100'}
-              `}
-              data-testid="dropzone-upload"
-            >
-              <input {...getInputProps()} data-testid="input-file" />
-              
-              {isUploading ? (
-                <div className="w-full max-w-xs space-y-4 text-center relative z-10">
-                  <div className="mx-auto w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Card className="border-none shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-100 text-sm font-medium">Total Uploads</p>
+                    <p className="text-3xl font-bold mt-1">{requests.length}</p>
                   </div>
-                  <h3 className="font-semibold text-lg">Uploading your image...</h3>
-                  <Progress value={uploadProgress} className="h-2" />
-                  <p className="text-sm text-muted-foreground">Please wait while we secure your file.</p>
+                  <div className="p-3 bg-white/20 rounded-xl">
+                    <FileImage className="h-6 w-6" />
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center space-y-4 p-8 relative z-10">
-                  <div className="mx-auto w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 group-hover:scale-110 transition-transform">
-                    <Upload className="h-10 w-10 text-primary" />
+              </CardContent>
+            </Card>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <Card className="border-none shadow-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-amber-100 text-sm font-medium">Pending</p>
+                    <p className="text-3xl font-bold mt-1">{pendingCount}</p>
                   </div>
-                  <div className="space-y-2">
-                    <h3 className="font-bold text-xl">Upload your photo</h3>
-                    <p className="text-muted-foreground max-w-sm mx-auto">
-                      Drag and drop your image here, or click to browse.
-                      We support JPG and PNG files.
-                    </p>
+                  <div className="p-3 bg-white/20 rounded-xl">
+                    <Clock className="h-6 w-6" />
                   </div>
-                  <Button variant="outline" className="mt-4" data-testid="button-select-file">Select File</Button>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+            <Card className="border-none shadow-lg bg-gradient-to-br from-green-500 to-emerald-500 text-white">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100 text-sm font-medium">Completed</p>
+                    <p className="text-3xl font-bold mt-1">{completedCount}</p>
+                  </div>
+                  <div className="p-3 bg-white/20 rounded-xl">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="border-none shadow-xl bg-white mb-8 overflow-hidden">
+            <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500" />
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-slate-800">
+                <CloudUpload className="h-5 w-5 text-blue-500" />
+                Upload New Image
+              </CardTitle>
+              <CardDescription>Drag and drop or click to select an image for processing</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div
+                {...getRootProps()}
+                className={`
+                  min-h-[250px] flex flex-col items-center justify-center rounded-2xl border-2 border-dashed 
+                  transition-all duration-300 cursor-pointer relative overflow-hidden
+                  ${isDragActive ? 'border-blue-500 bg-blue-50 scale-[1.02]' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'}
+                `}
+                data-testid="dropzone-upload"
+              >
+                <input {...getInputProps()} data-testid="input-file" />
+                
+                {isUploading ? (
+                  <div className="w-full max-w-xs space-y-4 text-center">
+                    <div className="mx-auto w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-4">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    </div>
+                    <h3 className="font-semibold text-lg text-slate-800">Uploading...</h3>
+                    <Progress value={uploadProgress} className="h-2" />
+                    <p className="text-sm text-slate-500">{uploadProgress}% complete</p>
+                  </div>
+                ) : (
+                  <div className="text-center space-y-4 p-8">
+                    <motion.div 
+                      animate={{ y: isDragActive ? -10 : 0 }}
+                      className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-2xl flex items-center justify-center shadow-sm"
+                    >
+                      <Upload className={`h-10 w-10 ${isDragActive ? 'text-blue-600' : 'text-blue-500'}`} />
+                    </motion.div>
+                    <div className="space-y-2">
+                      <h3 className="font-bold text-xl text-slate-800">
+                        {isDragActive ? 'Drop your image here' : 'Upload your image'}
+                      </h3>
+                      <p className="text-slate-500 max-w-sm mx-auto">
+                        Supports JPG, PNG, and WebP files up to 10MB
+                      </p>
+                    </div>
+                    <Button className="mt-4 bg-gradient-to-r from-blue-600 to-cyan-500 hover:opacity-90" data-testid="button-select-file">
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Select File
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {requests.length > 0 && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-bold">Your Requests</h2>
-            {requests.map((request) => (
-              <Card key={request.id} className="overflow-hidden border-none shadow-lg" data-testid={`card-request-${request.id}`}>
-                <div className={`h-2 w-full ${request.status === 'completed' ? 'bg-green-500' : 'bg-amber-500'}`} />
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="flex items-center gap-2">
-                        {request.originalFileName}
-                        {request.status === 'completed' ? (
-                          <Badge className="bg-green-500 hover:bg-green-600" data-testid={`badge-status-${request.id}`}>Completed</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-amber-600 bg-amber-50" data-testid={`badge-status-${request.id}`}>Pending</Badge>
-                        )}
-                      </CardTitle>
-                      <CardDescription>
-                        Uploaded on {new Date(request.uploadedAt).toLocaleDateString()}
-                      </CardDescription>
-                    </div>
-                    {request.status === 'pending' && (
-                      <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1 rounded-full text-sm font-medium">
-                        <Clock className="h-4 w-4" />
-                        <span>Est. delivery: 3 days</span>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-xl font-bold text-slate-800">Your Requests</h2>
+              <Badge variant="secondary" className="bg-slate-100">{requests.length}</Badge>
+            </div>
+            <div className="space-y-4">
+              {requests.map((request, index) => (
+                <motion.div
+                  key={request.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Card className="border-none shadow-lg overflow-hidden hover:shadow-xl transition-shadow" data-testid={`card-request-${request.id}`}>
+                    <div className={`h-1.5 w-full ${request.status === 'completed' ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gradient-to-r from-amber-400 to-orange-500'}`} />
+                    <CardContent className="p-6">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className={`p-3 rounded-xl ${request.status === 'completed' ? 'bg-green-100' : 'bg-amber-100'}`}>
+                            <FileImage className={`h-6 w-6 ${request.status === 'completed' ? 'text-green-600' : 'text-amber-600'}`} />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-slate-800 mb-1">{request.originalFileName}</h3>
+                            <div className="flex items-center gap-3 text-sm text-slate-500">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3.5 w-3.5" />
+                                {new Date(request.uploadedAt).toLocaleDateString()}
+                              </span>
+                              {request.status === 'completed' ? (
+                                <Badge className="bg-green-500 hover:bg-green-600" data-testid={`badge-status-${request.id}`}>
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Completed
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-amber-600 bg-amber-50" data-testid={`badge-status-${request.id}`}>
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Pending
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => downloadFile('original', request.originalFilePath)}
+                            className="gap-2"
+                            data-testid={`button-download-original-${request.id}`}
+                          >
+                            <Download className="h-4 w-4" />
+                            Original
+                          </Button>
+                          
+                          {request.status === 'completed' && request.editedFilePath && (
+                            <Button 
+                              size="sm"
+                              onClick={() => downloadFile('edited', request.editedFilePath!)}
+                              className="gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:opacity-90"
+                              data-testid={`button-download-edited-${request.id}`}
+                            >
+                              <Download className="h-4 w-4" />
+                              Edited
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </CardHeader>
-                
-                <CardContent>
-                  <div className="flex gap-4">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => downloadFile('original', request.originalFilePath)}
-                      data-testid={`button-download-original-${request.id}`}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Original
-                    </Button>
-                    
-                    {request.status === 'completed' && request.editedFilePath && (
-                      <Button 
-                        onClick={() => downloadFile('edited', request.editedFilePath!)}
-                        data-testid={`button-download-edited-${request.id}`}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Download Edited
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
         )}
       </main>
 
       <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
-            </div>
+            <motion.div 
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="mx-auto w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg"
+            >
+              <CheckCircle2 className="h-8 w-8 text-white" />
+            </motion.div>
             <DialogTitle className="text-center text-xl">Upload Successful!</DialogTitle>
             <DialogDescription className="text-center pt-2">
-              We have received your photo. You will get your edited image on this portal within 3 days.
+              Your image has been received. You will receive an email notification when your edited image is ready for download.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-center">
-            <Button onClick={() => setShowSuccessDialog(false)} className="w-full sm:w-auto" data-testid="button-close-success">
+            <Button onClick={() => setShowSuccessDialog(false)} className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-cyan-500 hover:opacity-90" data-testid="button-close-success">
               Got it, thanks
             </Button>
           </DialogFooter>
