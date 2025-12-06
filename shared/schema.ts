@@ -1,18 +1,56 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { MongoClient, ObjectId } from 'mongodb';
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-});
+export interface User {
+  _id?: ObjectId;
+  fullName: string;
+  email: string;
+  role: 'user' | 'admin';
+  createdAt: Date;
+}
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
+export interface OTPSession {
+  _id?: ObjectId;
+  email: string;
+  fullName: string;
+  otp: string;
+  expiresAt: Date;
+  createdAt: Date;
+}
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export interface ImageRequest {
+  _id?: ObjectId;
+  userId: string;
+  userEmail: string;
+  userFullName: string;
+  originalFileName: string;
+  originalFilePath: string;
+  editedFileName?: string;
+  editedFilePath?: string;
+  status: 'pending' | 'completed';
+  uploadedAt: Date;
+  completedAt?: Date;
+}
+
+// MongoDB connection
+let cachedClient: MongoClient | null = null;
+
+export async function connectToDatabase() {
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('MONGODB_URI environment variable is not set');
+  }
+
+  const client = new MongoClient(uri);
+  await client.connect();
+  cachedClient = client;
+  return client;
+}
+
+export async function getDatabase() {
+  const client = await connectToDatabase();
+  return client.db('bg_remover_portal');
+}
