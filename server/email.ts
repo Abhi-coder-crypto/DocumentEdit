@@ -1,12 +1,19 @@
 import { Resend } from 'resend';
 import { log } from './index';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY 
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 // Default sender - for production, update with your verified domain
 const FROM_EMAIL = 'BG Remover Portal <onboarding@resend.dev>';
 
 export async function sendOTPEmail(email: string, otp: string, fullName: string): Promise<boolean> {
+  if (!resend) {
+    log('Resend API key not configured, skipping OTP email', 'email');
+    return false;
+  }
+  
   try {
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
@@ -52,6 +59,11 @@ export async function sendEditedImageNotification(
   fullName: string, 
   originalFileName: string
 ): Promise<boolean> {
+  if (!resend) {
+    log('Resend API key not configured, skipping notification email', 'email');
+    return false;
+  }
+  
   try {
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
