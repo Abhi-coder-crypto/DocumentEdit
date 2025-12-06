@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import path from "path";
+import fs from "fs";
 import { nanoid } from "nanoid";
 import { log } from "./index";
 import { sendOTPEmail, sendEditedImageNotification } from "./email";
@@ -232,7 +233,6 @@ export async function registerRoutes(
       const filePath = path.join(process.cwd(), 'uploads', type, filename);
       
       // Check if file exists before attempting download
-      const fs = require('fs');
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ message: 'File not found. It may have been deleted or moved.' });
       }
