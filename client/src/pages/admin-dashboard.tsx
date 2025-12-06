@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { MOCK_REQUESTS, ImageRequest } from "@/lib/mock-data";
-import { LogOut, Download, Upload, Check, Search, Filter } from "lucide-react";
+import { LogOut, Download, Upload, Check, Search, Filter, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,31 +8,111 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { useDropzone } from "react-dropzone";
 
-import editedPlaceholder from "@assets/generated_images/professional_headshot_transparent_background.png";
+interface ImageRequest {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userFullName: string;
+  originalFileName: string;
+  originalFilePath: string;
+  editedFileName?: string;
+  editedFilePath?: string;
+  status: 'pending' | 'completed';
+  uploadedAt: string;
+  completedAt?: string;
+}
 
 export default function AdminDashboard() {
   const { logout, user } = useAuth();
-  const [requests, setRequests] = useState<ImageRequest[]>(MOCK_REQUESTS);
+  const { toast } = useToast();
+  const [requests, setRequests] = useState<ImageRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<ImageRequest | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const fetchRequests = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/admin/requests');
+      const data = await response.json();
+      
+      if (response.ok) {
+        setRequests(data.requests || []);
+      } else {
+        throw new Error(data.message || 'Failed to fetch requests');
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to fetch requests',
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
 
   const filteredRequests = requests.filter(req => 
     req.userFullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     req.userEmail?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleUploadEdited = () => {
-    if (!selectedRequest) return;
+  const onDrop = async (acceptedFiles: File[]) => {
+    if (acceptedFiles.length === 0 || !selectedRequest) return;
 
-    const updatedRequests = requests.map(req => 
-      req.id === selectedRequest.id 
-        ? { ...req, status: 'completed' as const, editedUrl: editedPlaceholder } 
-        : req
-    );
+    setIsUploading(true);
     
-    setRequests(updatedRequests);
-    setSelectedRequest(null);
+    const formData = new FormData();
+    formData.append('editedImage', acceptedFiles[0]);
+
+    try {
+      const response = await fetch(`/api/admin/upload-edited/${selectedRequest.id}`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Upload failed');
+      }
+
+      toast({
+        title: "Success",
+        description: "Edited image uploaded successfully",
+      });
+
+      await fetchRequests();
+      setSelectedRequest(null);
+    } catch (error: any) {
+      toast({
+        title: "Upload Failed",
+        description: error.message || 'Failed to upload edited image',
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    maxFiles: 1,
+    disabled: isUploading,
+  });
+
+  const downloadOriginal = (filePath: string) => {
+    const filename = filePath.split('/').pop();
+    window.open(`/api/images/download/original/${filename}`, '_blank');
   };
 
   return (
@@ -49,7 +128,7 @@ export default function AdminDashboard() {
               <p className="font-medium">{user?.fullName}</p>
               <p className="text-xs text-slate-400">Administrator</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={logout} className="text-white hover:bg-slate-800">
+            <Button variant="ghost" size="icon" onClick={logout} className="text-white hover:bg-slate-800" data-testid="button-logout">
               <LogOut className="h-5 w-5" />
             </Button>
           </div>
@@ -63,6 +142,10 @@ export default function AdminDashboard() {
             <p className="text-slate-500">Manage and process background removal requests.</p>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
+            <Button variant="outline" onClick={fetchRequests} disabled={isLoading} className="bg-white" data-testid="button-refresh">
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
             <div className="relative w-full md:w-64">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
               <Input 
@@ -70,11 +153,9 @@ export default function AdminDashboard() {
                 className="pl-9 bg-white"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                data-testid="input-search"
               />
             </div>
-            <Button variant="outline" size="icon" className="bg-white">
-              <Filter className="h-4 w-4" />
-            </Button>
           </div>
         </div>
 
@@ -84,52 +165,78 @@ export default function AdminDashboard() {
               <TableHeader>
                 <TableRow className="bg-slate-50 hover:bg-slate-50">
                   <TableHead>User</TableHead>
+                  <TableHead>File</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRequests.map((req) => (
-                  <TableRow key={req.id}>
-                    <TableCell>
-                      <div className="font-medium">{req.userFullName}</div>
-                      <div className="text-xs text-muted-foreground">{req.userEmail}</div>
-                    </TableCell>
-                    <TableCell>{new Date(req.uploadedAt).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={req.status === 'completed' ? 'default' : 'secondary'}
-                        className={req.status === 'completed' ? 'bg-green-500 hover:bg-green-600' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}
-                      >
-                        {req.status === 'completed' ? 'Completed' : 'Pending'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" asChild>
-                          <a href={req.originalUrl} target="_blank" rel="noreferrer">
-                            <Download className="h-4 w-4 mr-2" />
-                            Original
-                          </a>
-                        </Button>
-                        {req.status === 'pending' && (
-                          <Button size="sm" onClick={() => setSelectedRequest(req)}>
-                            <Upload className="h-4 w-4 mr-2" />
-                            Upload Edit
-                          </Button>
-                        )}
-                      </div>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                      <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                      <p className="mt-2 text-muted-foreground">Loading requests...</p>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filteredRequests.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      No requests found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredRequests.map((req) => (
+                    <TableRow key={req.id} data-testid={`row-request-${req.id}`}>
+                      <TableCell>
+                        <div className="font-medium">{req.userFullName}</div>
+                        <div className="text-xs text-muted-foreground">{req.userEmail}</div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {req.originalFileName}
+                      </TableCell>
+                      <TableCell>{new Date(req.uploadedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={req.status === 'completed' ? 'default' : 'secondary'}
+                          className={req.status === 'completed' ? 'bg-green-500 hover:bg-green-600' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}
+                          data-testid={`badge-status-${req.id}`}
+                        >
+                          {req.status === 'completed' ? 'Completed' : 'Pending'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => downloadOriginal(req.originalFilePath)}
+                            data-testid={`button-download-${req.id}`}
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Original
+                          </Button>
+                          {req.status === 'pending' && (
+                            <Button 
+                              size="sm" 
+                              onClick={() => setSelectedRequest(req)}
+                              data-testid={`button-upload-edit-${req.id}`}
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              Upload Edit
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       </main>
 
-      {/* Upload Dialog */}
       <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && setSelectedRequest(null)}>
         <DialogContent>
           <DialogHeader>
@@ -137,24 +244,41 @@ export default function AdminDashboard() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-2">
-              <Label>Original Image</Label>
-              <div className="aspect-video w-full bg-slate-100 rounded-md overflow-hidden">
-                <img 
-                  src={selectedRequest?.originalUrl} 
-                  alt="Original" 
-                  className="w-full h-full object-contain"
-                />
+              <Label>Request Details</Label>
+              <div className="text-sm text-muted-foreground">
+                <p><strong>User:</strong> {selectedRequest?.userFullName}</p>
+                <p><strong>Email:</strong> {selectedRequest?.userEmail}</p>
+                <p><strong>Original File:</strong> {selectedRequest?.originalFileName}</p>
               </div>
             </div>
             
-            <div className="p-8 border-2 border-dashed rounded-lg text-center space-y-2 hover:bg-slate-50 cursor-pointer transition-colors" onClick={handleUploadEdited}>
-              <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">Click to simulate uploading edited file</p>
-              <p className="text-xs text-muted-foreground">(For this demo, a placeholder image will be used)</p>
+            <div 
+              {...getRootProps()}
+              className={`p-8 border-2 border-dashed rounded-lg text-center space-y-2 cursor-pointer transition-colors
+                ${isDragActive ? 'border-primary bg-primary/5' : 'hover:bg-slate-50'}
+                ${isUploading ? 'opacity-50 pointer-events-none' : ''}
+              `}
+              data-testid="dropzone-edited"
+            >
+              <input {...getInputProps()} />
+              {isUploading ? (
+                <>
+                  <RefreshCw className="mx-auto h-8 w-8 text-muted-foreground animate-spin" />
+                  <p className="text-sm font-medium">Uploading...</p>
+                </>
+              ) : (
+                <>
+                  <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm font-medium">Click or drag to upload edited image</p>
+                  <p className="text-xs text-muted-foreground">PNG or JPG with transparent background</p>
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedRequest(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setSelectedRequest(null)} data-testid="button-cancel-upload">
+              Cancel
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

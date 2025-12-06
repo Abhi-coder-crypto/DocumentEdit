@@ -160,7 +160,7 @@ export default function AuthPage() {
                               />
                             </FormControl>
                             <CardDescription className="text-xs text-center pt-2">
-                              For demo purposes, use code: <strong>123456</strong>
+                              Check the server console for your OTP code
                             </CardDescription>
                             <FormMessage />
                           </FormItem>

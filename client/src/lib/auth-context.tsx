@@ -1,6 +1,12 @@
 import { createContext, useContext, useState, ReactNode } from "react";
-import { User, MOCK_ADMIN } from "./mock-data";
 import { useToast } from "@/hooks/use-toast";
+
+export interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  role: 'user' | 'admin';
+}
 
 interface AuthContextType {
   user: User | null;
@@ -20,41 +26,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, fullName: string) => {
     setIsLoading(true);
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setPendingLogin({ email, fullName });
-    setIsLoading(false);
-    
-    toast({
-      title: "OTP Sent",
-      description: `We sent a verification code to ${email}`,
-    });
+    try {
+      const response = await fetch('/api/auth/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, fullName }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to send OTP');
+      }
+
+      setPendingLogin({ email, fullName });
+      
+      toast({
+        title: "OTP Sent",
+        description: `We sent a verification code to ${email}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to send OTP',
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const verifyOtp = async (otp: string) => {
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (!pendingLogin) return false;
     
-    if (otp === "123456" && pendingLogin) {
-      // Check if it's the admin
-      if (pendingLogin.email === MOCK_ADMIN.email) {
-        setUser(MOCK_ADMIN);
-      } else {
-        setUser({
-          id: Math.random().toString(36).substr(2, 9),
-          email: pendingLogin.email,
-          fullName: pendingLogin.fullName,
-          role: 'user',
-          createdAt: new Date().toISOString()
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingLogin.email, otp }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast({
+          title: "Verification Failed",
+          description: data.message || 'Invalid OTP',
+          variant: "destructive",
         });
+        setIsLoading(false);
+        return false;
       }
+
+      setUser(data.user);
       setPendingLogin(null);
       setIsLoading(false);
       return true;
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || 'Failed to verify OTP',
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
   const logout = () => {
