@@ -5,6 +5,7 @@ import multer from "multer";
 import path from "path";
 import { nanoid } from "nanoid";
 import { log } from "./index";
+import { sendOTPEmail, sendEditedImageNotification } from "./email";
 
 // Configure multer for file uploads
 const uploadStorage = multer.diskStorage({
@@ -37,16 +38,6 @@ function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Helper to send email (will be replaced with actual email service)
-async function sendOTPEmail(email: string, otp: string, fullName: string): Promise<void> {
-  // For now, just log it - we'll integrate real email service later
-  log(`📧 OTP for ${fullName} (${email}): ${otp}`, 'email');
-  console.log(`\n🔐 ===== OTP CODE =====`);
-  console.log(`   Email: ${email}`);
-  console.log(`   Code: ${otp}`);
-  console.log(`   Expires in: 10 minutes`);
-  console.log(`========================\n`);
-}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -275,7 +266,12 @@ export async function registerRoutes(
         return res.status(404).json({ message: 'Request not found' });
       }
 
-      // TODO: Send email notification to user
+      // Send email notification to user
+      await sendEditedImageNotification(
+        updatedRequest.userEmail,
+        updatedRequest.userFullName,
+        updatedRequest.originalFileName
+      );
 
       res.json({
         message: 'Edited image uploaded successfully',

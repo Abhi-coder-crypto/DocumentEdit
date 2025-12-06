@@ -81,10 +81,13 @@ Preferred communication style: Simple, everyday language.
   - Files named with timestamp and nanoid for uniqueness
 
 **Email Service:**
-- Currently logs OTP codes to console (placeholder implementation)
-- Designed to integrate with email service provider (e.g., SendGrid, AWS SES, Nodemailer)
+- **Resend**: Integrated for sending transactional emails
+  - OTP emails sent to clients and admins during login
+  - Notification emails sent to clients when admin uploads edited images
+  - Configuration in `server/email.ts`
+  - API key stored as `RESEND_API_KEY` secret
 - OTP format: 6-digit code with 10-minute expiration
-- **TODO**: Set up SendGrid integration when ready to send real emails
+- Free tier: 100 emails/day
 
 **Third-Party Libraries:**
 - **Radix UI**: Accessible component primitives
