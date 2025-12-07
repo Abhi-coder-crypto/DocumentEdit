@@ -1,5 +1,8 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { MongoClient, ObjectId } from "mongodb";
+import nodemailer from "nodemailer";
+
+const APP_NAME = "Cipla Healthcare Portal";
 
 let cachedClient: MongoClient | null = null;
 
@@ -23,52 +26,97 @@ function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function sendOTPEmail(email: string, otp: string, fullName: string): Promise<boolean> {
-  const { Resend } = await import("resend");
-  const resend = new Resend(process.env.RESEND_API_KEY);
+function getTransporter() {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    throw new Error("Email service not configured. Please add GMAIL_USER and GMAIL_APP_PASSWORD to your Netlify environment variables.");
+  }
   
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  });
+}
+
+async function sendOTPEmail(email: string, otp: string, fullName: string): Promise<boolean> {
   try {
-    const { error } = await resend.emails.send({
-      from: "BG Remover Portal <onboarding@resend.dev>",
+    const transporter = getTransporter();
+    
+    await transporter.sendMail({
+      from: `${APP_NAME} <${process.env.GMAIL_USER}>`,
       to: email,
-      subject: "Your Login Code - BG Remover Portal",
+      subject: `Your Login Code - ${APP_NAME}`,
       html: `
-        <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 32px; background: white; border-radius: 8px;">
-          <h1 style="color: #18181b;">Login Code</h1>
-          <p>Hello ${fullName},</p>
-          <div style="background: #f4f4f5; padding: 20px; text-align: center; border-radius: 8px; margin: 24px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px;">${otp}</span>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px;">
+          <div style="max-width: 400px; margin: 0 auto; background: white; border-radius: 8px; padding: 32px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h1 style="color: #18181b; font-size: 24px; margin: 0 0 8px 0;">Login Code</h1>
+            <p style="color: #71717a; font-size: 14px; margin: 0 0 24px 0;">Hello ${fullName},</p>
+            <div style="background: #f4f4f5; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 24px;">
+              <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #18181b;">${otp}</span>
+            </div>
+            <p style="color: #71717a; font-size: 14px; margin: 0 0 8px 0;">This code expires in 10 minutes.</p>
+            <p style="color: #a1a1aa; font-size: 12px; margin: 0;">If you did not request this code, please ignore this email.</p>
           </div>
-          <p style="color: #71717a; font-size: 14px;">This code expires in 10 minutes.</p>
-        </div>
+        </body>
+        </html>
       `,
     });
-    return !error;
-  } catch {
-    return false;
+    
+    console.log(`OTP email sent to ${email}`);
+    return true;
+  } catch (err) {
+    console.error("Error sending OTP email:", err);
+    throw err;
   }
 }
 
 async function sendEditedImageNotification(email: string, fullName: string, originalFileName: string): Promise<boolean> {
-  const { Resend } = await import("resend");
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  
   try {
-    const { error } = await resend.emails.send({
-      from: "BG Remover Portal <onboarding@resend.dev>",
+    const transporter = getTransporter();
+    
+    await transporter.sendMail({
+      from: `${APP_NAME} <${process.env.GMAIL_USER}>`,
       to: email,
-      subject: "Your Image is Ready! - BG Remover Portal",
+      subject: `Your Image is Ready! - ${APP_NAME}`,
       html: `
-        <div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 32px; background: white; border-radius: 8px;">
-          <h1 style="color: #18181b;">Your Image is Ready!</h1>
-          <p>Hello ${fullName},</p>
-          <p>Great news! The background has been removed from your image: <strong>${originalFileName}</strong></p>
-          <p>Log in to your account to download the edited image.</p>
-        </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px;">
+          <div style="max-width: 400px; margin: 0 auto; background: white; border-radius: 8px; padding: 32px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h1 style="color: #18181b; font-size: 24px; margin: 0 0 8px 0;">Your Image is Ready!</h1>
+            <p style="color: #71717a; font-size: 14px; margin: 0 0 24px 0;">Hello ${fullName},</p>
+            <p style="color: #3f3f46; font-size: 14px; margin: 0 0 16px 0;">
+              Great news! The background has been removed from your image:
+            </p>
+            <div style="background: #f4f4f5; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+              <span style="font-size: 14px; color: #18181b; font-weight: 500;">${originalFileName}</span>
+            </div>
+            <p style="color: #3f3f46; font-size: 14px; margin: 0 0 24px 0;">
+              Log in to your account to download the edited image.
+            </p>
+            <p style="color: #a1a1aa; font-size: 12px; margin: 0;">Thank you for using ${APP_NAME}!</p>
+          </div>
+        </body>
+        </html>
       `,
     });
-    return !error;
-  } catch {
+    
+    console.log(`Notification email sent to ${email}`);
+    return true;
+  } catch (err) {
+    console.error("Error sending notification email:", err);
     return false;
   }
 }
