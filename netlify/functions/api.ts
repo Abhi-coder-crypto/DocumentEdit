@@ -355,7 +355,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         const requestId = path.replace("/admin/upload-edited/", "");
         
         const formData = await parseMultipartForm(event);
-        const imageFile = formData.files.image;
+        // Accept both 'image' and 'editedImage' field names
+        const imageFile = formData.files.image || formData.files.editedImage;
 
         if (!imageFile) {
           return { statusCode: 400, headers, body: JSON.stringify({ message: "No image file provided" }) };
