@@ -1,7 +1,6 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { MongoClient, ObjectId } from "mongodb";
 import nodemailer from "nodemailer";
-import { getStore } from "@netlify/blobs";
 import Busboy from "busboy";
 
 const APP_NAME = "Cipla Healthcare Portal";
@@ -213,13 +212,21 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         { upsert: true }
       );
 
-      await sendOTPEmail(email, otp, fullName);
-
-      return { 
-        statusCode: 200, 
-        headers, 
-        body: JSON.stringify({ message: "OTP sent successfully" }) 
-      };
+      try {
+        await sendOTPEmail(email, otp, fullName);
+        return { 
+          statusCode: 200, 
+          headers, 
+          body: JSON.stringify({ message: "OTP sent successfully", emailSent: true }) 
+        };
+      } catch (emailError: any) {
+        console.error("Email send error:", emailError);
+        return { 
+          statusCode: 500, 
+          headers, 
+          body: JSON.stringify({ message: "Failed to send OTP email. Please check email configuration.", emailSent: false }) 
+        };
+      }
     }
 
     // POST /auth/verify-otp
@@ -233,12 +240,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
       const session = await db.collection("otp_sessions").findOne({ email });
       if (!session) {
-        return { statusCode: 400, headers, body: JSON.stringify({ message: "No OTP session found" }) };
+        return { statusCode: 400, headers, body: JSON.stringify({ message: "No OTP session found. Please request a new OTP." }) };
       }
 
       if (new Date() > session.expiresAt) {
         await db.collection("otp_sessions").deleteOne({ email });
-        return { statusCode: 400, headers, body: JSON.stringify({ message: "OTP has expired" }) };
+        return { statusCode: 400, headers, body: JSON.stringify({ message: "OTP has expired. Please request a new one." }) };
       }
 
       if (session.otp !== otp) {
@@ -274,7 +281,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
-    // POST /images/upload - User uploads an image
+    // POST /images/upload - User uploads an image (store in MongoDB)
     if (path === "/images/upload" && method === "POST") {
       try {
         const formData = await parseMultipartForm(event);
@@ -299,24 +306,25 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         }
 
         const uniqueId = generateUniqueId();
-        const ext = imageFile.filename.split('.').pop() || 'jpg';
-        const blobKey = `original/${uniqueId}.${ext}`;
 
-        const store = getStore("images");
-        await store.set(blobKey, imageFile.content, {
-          metadata: { 
-            contentType: imageFile.type,
-            originalFilename: imageFile.filename,
-            uploadedAt: new Date().toISOString()
-          }
-        });
+        // Store image data directly in MongoDB
+        const imageDoc = {
+          uniqueId,
+          filename: imageFile.filename,
+          contentType: imageFile.type,
+          data: imageFile.content.toString('base64'),
+          type: 'original',
+          uploadedAt: new Date(),
+        };
+
+        await db.collection("images").insertOne(imageDoc);
 
         const imageRequest = {
           userId,
           userEmail,
           userFullName,
           originalFileName: imageFile.filename,
-          originalFilePath: blobKey,
+          originalImageId: uniqueId,
           status: 'pending',
           uploadedAt: new Date(),
         };
@@ -359,24 +367,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         }
 
         const uniqueId = generateUniqueId();
-        const ext = imageFile.filename.split('.').pop() || 'png';
-        const blobKey = `edited/${uniqueId}.${ext}`;
 
-        const store = getStore("images");
-        await store.set(blobKey, imageFile.content, {
-          metadata: { 
-            contentType: imageFile.type,
-            originalFilename: imageFile.filename,
-            editedAt: new Date().toISOString()
-          }
-        });
+        // Store edited image in MongoDB
+        const imageDoc = {
+          uniqueId,
+          filename: imageFile.filename,
+          contentType: imageFile.type,
+          data: imageFile.content.toString('base64'),
+          type: 'edited',
+          requestId,
+          uploadedAt: new Date(),
+        };
+
+        await db.collection("images").insertOne(imageDoc);
 
         await db.collection("image_requests").updateOne(
           { _id: new ObjectId(requestId) },
           { 
             $set: { 
               editedFileName: imageFile.filename,
-              editedFilePath: blobKey,
+              editedImageId: uniqueId,
               status: 'completed',
               completedAt: new Date(),
             } 
@@ -397,7 +407,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             request: {
               id: requestId,
               status: 'completed',
-              editedFilePath: blobKey,
+              editedImageId: uniqueId,
             }
           })
         };
@@ -407,28 +417,24 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       }
     }
 
-    // GET /images/serve/:key - Serve image from blob storage
+    // GET /images/serve/:uniqueId - Serve image from MongoDB
     if (path.startsWith("/images/serve/") && method === "GET") {
       try {
-        const blobKey = path.replace("/images/serve/", "");
-        const store = getStore("images");
+        const uniqueId = path.replace("/images/serve/", "");
         
-        const blob = await store.get(blobKey, { type: 'arrayBuffer' });
-        if (!blob) {
+        const imageDoc = await db.collection("images").findOne({ uniqueId });
+        if (!imageDoc) {
           return { statusCode: 404, headers, body: JSON.stringify({ message: "Image not found" }) };
         }
-
-        const metadata = await store.getMetadata(blobKey);
-        const contentType = metadata?.metadata?.contentType || 'image/jpeg';
 
         return {
           statusCode: 200,
           headers: {
-            "Content-Type": contentType,
+            "Content-Type": imageDoc.contentType || 'image/jpeg',
             "Cache-Control": "public, max-age=31536000",
             "Access-Control-Allow-Origin": "*",
           },
-          body: Buffer.from(blob).toString('base64'),
+          body: imageDoc.data,
           isBase64Encoded: true,
         };
       } catch (error: any) {
@@ -449,9 +455,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           requests: requests.map((r) => ({
             id: r._id.toString(),
             originalFileName: r.originalFileName,
-            originalFilePath: r.originalFilePath,
+            originalImageId: r.originalImageId,
             editedFileName: r.editedFileName,
-            editedFilePath: r.editedFilePath,
+            editedImageId: r.editedImageId,
             status: r.status,
             uploadedAt: r.uploadedAt,
             completedAt: r.completedAt,
@@ -474,9 +480,9 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             userEmail: r.userEmail,
             userFullName: r.userFullName,
             originalFileName: r.originalFileName,
-            originalFilePath: r.originalFilePath,
+            originalImageId: r.originalImageId,
             editedFileName: r.editedFileName,
-            editedFilePath: r.editedFilePath,
+            editedImageId: r.editedImageId,
             status: r.status,
             uploadedAt: r.uploadedAt,
             completedAt: r.completedAt,

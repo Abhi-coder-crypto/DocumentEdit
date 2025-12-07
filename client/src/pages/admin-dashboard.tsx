@@ -20,9 +20,9 @@ interface ImageRequest {
   userEmail: string;
   userFullName: string;
   originalFileName: string;
-  originalFilePath: string;
+  originalImageId: string;
   editedFileName?: string;
-  editedFilePath?: string;
+  editedImageId?: string;
   status: 'pending' | 'completed';
   uploadedAt: string;
   completedAt?: string;
@@ -49,7 +49,7 @@ export default function AdminDashboard() {
           userEmail: newRequest.userEmail,
           userFullName: newRequest.userFullName,
           originalFileName: newRequest.originalFileName,
-          originalFilePath: newRequest.originalFilePath,
+          originalImageId: newRequest.originalImageId,
           status: 'pending' as const,
           uploadedAt: newRequest.uploadedAt,
         }];
@@ -66,7 +66,7 @@ export default function AdminDashboard() {
               ...req, 
               status: 'completed' as const, 
               editedFileName: editedRequest.editedFileName, 
-              editedFilePath: editedRequest.editedFilePath, 
+              editedImageId: editedRequest.editedImageId, 
               completedAt: editedRequest.completedAt 
             }
           : req
@@ -160,14 +160,8 @@ export default function AdminDashboard() {
     disabled: isUploading,
   });
 
-  const downloadOriginal = (filePath: string) => {
-    const filename = filePath.split('/').pop();
-    window.open(`/api/images/download/original/${filename}`, '_blank');
-  };
-
-  const downloadEdited = (filePath: string) => {
-    const filename = filePath.split('/').pop();
-    window.open(`/api/images/download/edited/${filename}`, '_blank');
+  const downloadImage = (imageId: string) => {
+    window.open(`/api/images/serve/${imageId}`, '_blank');
   };
 
   const getInitials = (name: string) => {
@@ -413,18 +407,18 @@ export default function AdminDashboard() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => downloadOriginal(req.originalFilePath)}
+                            onClick={() => downloadImage(req.originalImageId)}
                             className="bg-white/50 dark:bg-slate-700/50"
                             data-testid={`button-download-original-${req.id}`}
                           >
                             <Download className="h-4 w-4 mr-1.5" />
                             Original
                           </Button>
-                          {req.status === 'completed' && req.editedFilePath && (
+                          {req.status === 'completed' && req.editedImageId && (
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              onClick={() => downloadEdited(req.editedFilePath!)}
+                              onClick={() => downloadImage(req.editedImageId!)}
                               className="bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800"
                               data-testid={`button-download-edited-${req.id}`}
                             >

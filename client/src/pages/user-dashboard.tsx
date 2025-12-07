@@ -15,9 +15,9 @@ import { useWebSocket, WSMessage } from "@/hooks/use-websocket";
 interface ImageRequest {
   id: string;
   originalFileName: string;
-  originalFilePath: string;
+  originalImageId: string;
   editedFileName?: string;
-  editedFilePath?: string;
+  editedImageId?: string;
   status: 'pending' | 'completed';
   uploadedAt: string;
   completedAt?: string;
@@ -41,7 +41,7 @@ export default function UserDashboard() {
               ...req, 
               status: 'completed' as const,
               editedFileName: editedRequest.editedFileName,
-              editedFilePath: editedRequest.editedFilePath,
+              editedImageId: editedRequest.editedImageId,
               completedAt: editedRequest.completedAt,
             }
           : req
@@ -128,9 +128,8 @@ export default function UserDashboard() {
     disabled: isUploading,
   });
 
-  const downloadFile = (type: 'original' | 'edited', filePath: string) => {
-    const filename = filePath.split('/').pop();
-    window.open(`/api/images/download/${type}/${filename}`, '_blank');
+  const downloadFile = (imageId: string) => {
+    window.open(`/api/images/serve/${imageId}`, '_blank');
   };
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
@@ -362,7 +361,7 @@ export default function UserDashboard() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => downloadFile('original', request.originalFilePath)}
+                            onClick={() => downloadFile(request.originalImageId)}
                             className="gap-2"
                             data-testid={`button-download-original-${request.id}`}
                           >
@@ -370,10 +369,10 @@ export default function UserDashboard() {
                             Original
                           </Button>
                           
-                          {request.status === 'completed' && request.editedFilePath && (
+                          {request.status === 'completed' && request.editedImageId && (
                             <Button 
                               size="sm"
-                              onClick={() => downloadFile('edited', request.editedFilePath!)}
+                              onClick={() => downloadFile(request.editedImageId!)}
                               className="gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:opacity-90"
                               data-testid={`button-download-edited-${request.id}`}
                             >
