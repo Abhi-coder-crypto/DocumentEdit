@@ -1,6 +1,8 @@
 import { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import { MongoClient, ObjectId } from "mongodb";
 import nodemailer from "nodemailer";
+import { getStore } from "@netlify/blobs";
+import Busboy from "busboy";
 
 const APP_NAME = "Cipla Healthcare Portal";
 
@@ -24,6 +26,10 @@ async function getDb() {
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function generateUniqueId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 12)}`;
 }
 
 function getTransporter() {
@@ -119,6 +125,56 @@ async function sendEditedImageNotification(email: string, fullName: string, orig
     console.error("Error sending notification email:", err);
     return false;
   }
+}
+
+interface ParsedFormData {
+  fields: Record<string, string>;
+  files: Record<string, { filename: string; type: string; content: Buffer }>;
+}
+
+function parseMultipartForm(event: HandlerEvent): Promise<ParsedFormData> {
+  return new Promise((resolve, reject) => {
+    const fields: Record<string, string> = {};
+    const files: Record<string, { filename: string; type: string; content: Buffer }> = {};
+
+    const busboy = Busboy({ headers: event.headers as Record<string, string> });
+
+    busboy.on('file', (fieldname: string, filestream: any, info: { filename: string; encoding: string; mimeType: string }) => {
+      const { filename, mimeType } = info;
+      const chunks: Buffer[] = [];
+      
+      filestream.on('data', (data: Buffer) => {
+        chunks.push(data);
+      });
+      
+      filestream.on('end', () => {
+        files[fieldname] = {
+          filename,
+          type: mimeType,
+          content: Buffer.concat(chunks),
+        };
+      });
+    });
+
+    busboy.on('field', (fieldName: string, value: string) => {
+      fields[fieldName] = value;
+    });
+
+    busboy.on('finish', () => {
+      resolve({ fields, files });
+    });
+
+    busboy.on('error', (error: Error) => {
+      reject(error);
+    });
+
+    const bodyBuffer = event.isBase64Encoded 
+      ? Buffer.from(event.body || '', 'base64')
+      : Buffer.from(event.body || '');
+    
+    busboy.write(bodyBuffer);
+    busboy.end();
+  });
 }
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
@@ -218,6 +274,169 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
+    // POST /images/upload - User uploads an image
+    if (path === "/images/upload" && method === "POST") {
+      try {
+        const formData = await parseMultipartForm(event);
+        const { userId, userEmail, userFullName } = formData.fields;
+        const imageFile = formData.files.image;
+
+        if (!imageFile) {
+          return { statusCode: 400, headers, body: JSON.stringify({ message: "No image file provided" }) };
+        }
+
+        if (!userId || !userEmail || !userFullName) {
+          return { statusCode: 400, headers, body: JSON.stringify({ message: "User information is required" }) };
+        }
+
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(imageFile.type)) {
+          return { statusCode: 400, headers, body: JSON.stringify({ message: "Invalid file type. Only JPG, PNG, and WEBP are allowed." }) };
+        }
+
+        if (imageFile.content.length > 10 * 1024 * 1024) {
+          return { statusCode: 400, headers, body: JSON.stringify({ message: "File too large. Maximum size is 10MB." }) };
+        }
+
+        const uniqueId = generateUniqueId();
+        const ext = imageFile.filename.split('.').pop() || 'jpg';
+        const blobKey = `original/${uniqueId}.${ext}`;
+
+        const store = getStore("images");
+        await store.set(blobKey, imageFile.content, {
+          metadata: { 
+            contentType: imageFile.type,
+            originalFilename: imageFile.filename,
+            uploadedAt: new Date().toISOString()
+          }
+        });
+
+        const imageRequest = {
+          userId,
+          userEmail,
+          userFullName,
+          originalFileName: imageFile.filename,
+          originalFilePath: blobKey,
+          status: 'pending',
+          uploadedAt: new Date(),
+        };
+
+        const result = await db.collection("image_requests").insertOne(imageRequest);
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            message: "Image uploaded successfully",
+            request: {
+              id: result.insertedId.toString(),
+              status: 'pending',
+              uploadedAt: imageRequest.uploadedAt,
+            }
+          })
+        };
+      } catch (uploadError: any) {
+        console.error("Upload error:", uploadError);
+        return { statusCode: 500, headers, body: JSON.stringify({ message: uploadError.message || "Failed to upload image" }) };
+      }
+    }
+
+    // POST /admin/upload-edited/:requestId - Admin uploads edited image
+    if (path.startsWith("/admin/upload-edited/") && method === "POST") {
+      try {
+        const requestId = path.replace("/admin/upload-edited/", "");
+        
+        const formData = await parseMultipartForm(event);
+        const imageFile = formData.files.image;
+
+        if (!imageFile) {
+          return { statusCode: 400, headers, body: JSON.stringify({ message: "No image file provided" }) };
+        }
+
+        const imageRequest = await db.collection("image_requests").findOne({ _id: new ObjectId(requestId) });
+        if (!imageRequest) {
+          return { statusCode: 404, headers, body: JSON.stringify({ message: "Image request not found" }) };
+        }
+
+        const uniqueId = generateUniqueId();
+        const ext = imageFile.filename.split('.').pop() || 'png';
+        const blobKey = `edited/${uniqueId}.${ext}`;
+
+        const store = getStore("images");
+        await store.set(blobKey, imageFile.content, {
+          metadata: { 
+            contentType: imageFile.type,
+            originalFilename: imageFile.filename,
+            editedAt: new Date().toISOString()
+          }
+        });
+
+        await db.collection("image_requests").updateOne(
+          { _id: new ObjectId(requestId) },
+          { 
+            $set: { 
+              editedFileName: imageFile.filename,
+              editedFilePath: blobKey,
+              status: 'completed',
+              completedAt: new Date(),
+            } 
+          }
+        );
+
+        await sendEditedImageNotification(
+          imageRequest.userEmail,
+          imageRequest.userFullName,
+          imageRequest.originalFileName
+        );
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            message: "Edited image uploaded successfully",
+            request: {
+              id: requestId,
+              status: 'completed',
+              editedFilePath: blobKey,
+            }
+          })
+        };
+      } catch (uploadError: any) {
+        console.error("Upload edited error:", uploadError);
+        return { statusCode: 500, headers, body: JSON.stringify({ message: uploadError.message || "Failed to upload edited image" }) };
+      }
+    }
+
+    // GET /images/serve/:key - Serve image from blob storage
+    if (path.startsWith("/images/serve/") && method === "GET") {
+      try {
+        const blobKey = path.replace("/images/serve/", "");
+        const store = getStore("images");
+        
+        const blob = await store.get(blobKey, { type: 'arrayBuffer' });
+        if (!blob) {
+          return { statusCode: 404, headers, body: JSON.stringify({ message: "Image not found" }) };
+        }
+
+        const metadata = await store.getMetadata(blobKey);
+        const contentType = metadata?.metadata?.contentType || 'image/jpeg';
+
+        return {
+          statusCode: 200,
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=31536000",
+            "Access-Control-Allow-Origin": "*",
+          },
+          body: Buffer.from(blob).toString('base64'),
+          isBase64Encoded: true,
+        };
+      } catch (error: any) {
+        console.error("Serve image error:", error);
+        return { statusCode: 500, headers, body: JSON.stringify({ message: "Failed to serve image" }) };
+      }
+    }
+
     // GET /images/user/:userId
     if (path.startsWith("/images/user/") && method === "GET") {
       const userId = path.replace("/images/user/", "");
@@ -261,6 +480,25 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             status: r.status,
             uploadedAt: r.uploadedAt,
             completedAt: r.completedAt,
+          })),
+        }),
+      };
+    }
+
+    // GET /admin/users - Get all users for admin
+    if (path === "/admin/users" && method === "GET") {
+      const users = await db.collection("users").find({}).sort({ createdAt: -1 }).toArray();
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          users: users.map((u) => ({
+            id: u._id.toString(),
+            email: u.email,
+            fullName: u.fullName,
+            role: u.role,
+            createdAt: u.createdAt,
           })),
         }),
       };

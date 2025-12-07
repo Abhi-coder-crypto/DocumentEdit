@@ -7,6 +7,11 @@ export interface WSMessage {
   message?: string;
 }
 
+function isNetlifyDeployment(): boolean {
+  const host = window.location.host;
+  return host.includes('netlify.app') || host.includes('netlify.com');
+}
+
 export function useWebSocket(onMessage?: (message: WSMessage) => void) {
   const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
@@ -15,6 +20,10 @@ export function useWebSocket(onMessage?: (message: WSMessage) => void) {
   const shouldReconnectRef = useRef(true);
 
   const connect = useCallback(() => {
+    if (isNetlifyDeployment()) {
+      return;
+    }
+    
     if (!shouldReconnectRef.current) {
       return;
     }
