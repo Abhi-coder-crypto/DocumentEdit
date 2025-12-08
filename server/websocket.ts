@@ -52,8 +52,8 @@ export function setupWebSocket(httpServer: Server) {
 export function notifyNewImageUpload(imageRequest: {
   id: string;
   userId: string;
-  userEmail: string;
-  userFullName: string;
+  employeeId: string;
+  displayName: string;
   originalFileName: string;
   originalFilePath: string;
   status: string;
@@ -67,7 +67,7 @@ export function notifyNewImageUpload(imageRequest: {
   clients.forEach(client => {
     if (client.ws.readyState === WebSocket.OPEN && client.role === 'admin') {
       client.ws.send(message);
-      log(`Notified admin about new image upload from ${imageRequest.userEmail}`, 'websocket');
+      log(`Notified admin about new image upload from ${imageRequest.displayName}`, 'websocket');
     }
   });
 }
@@ -75,8 +75,8 @@ export function notifyNewImageUpload(imageRequest: {
 export function notifyImageEdited(imageRequest: {
   id: string;
   userId: string;
-  userEmail: string;
-  userFullName: string;
+  employeeId: string;
+  displayName: string;
   originalFileName: string;
   originalFilePath: string;
   editedFileName: string;
@@ -93,7 +93,7 @@ export function notifyImageEdited(imageRequest: {
   clients.forEach(client => {
     if (client.ws.readyState === WebSocket.OPEN && client.userId === imageRequest.userId) {
       client.ws.send(message);
-      log(`Notified user ${imageRequest.userEmail} about edited image`, 'websocket');
+      log(`Notified user ${imageRequest.displayName} about edited image`, 'websocket');
     }
   });
 }

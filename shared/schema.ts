@@ -1,27 +1,29 @@
 import { MongoClient, ObjectId } from 'mongodb';
 
-export interface User {
+export interface Employee {
   _id?: ObjectId;
-  fullName: string;
-  email: string;
-  role: 'user' | 'admin';
+  employeeId: string;
+  displayName: string;
+  miniRegionName: string;
+  regionName: string;
+  subZoneName: string;
+  zoneName: string;
   createdAt: Date;
 }
 
-export interface OTPSession {
+export interface User {
   _id?: ObjectId;
-  email: string;
-  fullName: string;
-  otp: string;
-  expiresAt: Date;
+  employeeId: string;
+  displayName: string;
+  role: 'user' | 'admin';
   createdAt: Date;
 }
 
 export interface ImageRequest {
   _id?: ObjectId;
   userId: string;
-  userEmail: string;
-  userFullName: string;
+  employeeId: string;
+  displayName: string;
   originalFileName: string;
   originalFilePath: string;
   editedFileName?: string;

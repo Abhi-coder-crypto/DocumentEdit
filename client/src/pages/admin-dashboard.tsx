@@ -1,35 +1,31 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { LogOut, Download, Upload, Check, Search, Filter, RefreshCw, Wifi, WifiOff, User, Image, Clock, CheckCircle, Users } from "lucide-react";
+import { Download, Upload, Search, RefreshCw, Wifi, WifiOff, Image, Clock, CheckCircle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
 import { useWebSocket, WSMessage } from "@/hooks/use-websocket";
-import { Link } from "wouter";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 interface ImageRequest {
   id: string;
   userId: string;
-  userEmail: string;
-  userFullName: string;
+  employeeId: string;
+  displayName: string;
   originalFileName: string;
-  originalImageId: string;
+  originalFilePath: string;
   editedFileName?: string;
-  editedImageId?: string;
+  editedFilePath?: string;
   status: 'pending' | 'completed';
   uploadedAt: string;
   completedAt?: string;
 }
 
 export default function AdminDashboard() {
-  const { logout, user } = useAuth();
   const { toast } = useToast();
   const [requests, setRequests] = useState<ImageRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<ImageRequest | null>(null);
@@ -46,17 +42,17 @@ export default function AdminDashboard() {
         return [...prev, {
           id: String(newRequest.id),
           userId: String(newRequest.userId),
-          userEmail: newRequest.userEmail,
-          userFullName: newRequest.userFullName,
+          employeeId: String(newRequest.employeeId),
+          displayName: newRequest.displayName,
           originalFileName: newRequest.originalFileName,
-          originalImageId: newRequest.originalImageId,
+          originalFilePath: newRequest.originalFilePath,
           status: 'pending' as const,
           uploadedAt: newRequest.uploadedAt,
         }];
       });
       toast({
         title: "New Image Upload",
-        description: `${newRequest.userFullName} uploaded "${newRequest.originalFileName}"`,
+        description: `${newRequest.displayName} uploaded "${newRequest.originalFileName}"`,
       });
     } else if (message.type === 'image_edited') {
       const editedRequest = message.data;
@@ -66,7 +62,7 @@ export default function AdminDashboard() {
               ...req, 
               status: 'completed' as const, 
               editedFileName: editedRequest.editedFileName, 
-              editedImageId: editedRequest.editedImageId, 
+              editedFilePath: editedRequest.editedFilePath, 
               completedAt: editedRequest.completedAt 
             }
           : req
@@ -107,8 +103,8 @@ export default function AdminDashboard() {
   }, [fetchRequests]);
 
   const filteredRequests = requests.filter(req => 
-    req.userFullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.userEmail?.toLowerCase().includes(searchTerm.toLowerCase())
+    req.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    req.employeeId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
@@ -160,8 +156,10 @@ export default function AdminDashboard() {
     disabled: isUploading,
   });
 
-  const downloadImage = (imageId: string) => {
-    window.open(`/api/images/serve/${imageId}`, '_blank');
+  const downloadImage = (filePath: string) => {
+    const filename = filePath.split('/').pop();
+    const type = filePath.includes('/edited/') ? 'edited' : 'original';
+    window.open(`/api/images/download/${type}/${filename}`, '_blank');
   };
 
   const getInitials = (name: string) => {
@@ -175,7 +173,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800">
-      {/* Header */}
       <header className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white sticky top-0 z-50 shadow-lg">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -209,37 +206,19 @@ export default function AdminDashboard() {
             <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-slate-800/30">
               <Avatar className="h-8 w-8 border-2 border-indigo-400/50">
                 <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-medium">
-                  {user?.fullName ? getInitials(user.fullName) : 'A'}
+                  AD
                 </AvatarFallback>
               </Avatar>
               <div className="text-right">
-                <p className="text-sm font-medium">{user?.fullName}</p>
+                <p className="text-sm font-medium">Admin</p>
                 <p className="text-xs text-indigo-300">Administrator</p>
               </div>
             </div>
-            
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="text-white hover:bg-slate-700/50 gap-2" data-testid="link-client-portal">
-                <User className="h-4 w-4" />
-                <span className="hidden sm:inline">Client View</span>
-              </Button>
-            </Link>
-            
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={logout} 
-              className="text-white hover:bg-red-500/20 hover:text-red-300" 
-              data-testid="button-logout"
-            >
-              <LogOut className="h-5 w-5" />
-            </Button>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-md overflow-visible">
             <CardContent className="p-4">
@@ -298,7 +277,6 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Header and Search */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">User Requests</h1>
@@ -328,7 +306,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Requests Table */}
         <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur border-0 shadow-lg overflow-hidden">
           <CardContent className="p-0">
             <Table>
@@ -369,12 +346,12 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-600">
                             <AvatarFallback className="bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium">
-                              {req.userFullName ? getInitials(req.userFullName) : 'U'}
+                              {req.displayName ? getInitials(req.displayName) : 'U'}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium text-foreground">{req.userFullName}</p>
-                            <p className="text-xs text-muted-foreground">{req.userEmail}</p>
+                            <p className="font-medium text-foreground">{req.displayName}</p>
+                            <p className="text-xs text-muted-foreground">ID: {req.employeeId}</p>
                           </div>
                         </div>
                       </TableCell>
@@ -407,18 +384,18 @@ export default function AdminDashboard() {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => downloadImage(req.originalImageId)}
+                            onClick={() => downloadImage(req.originalFilePath)}
                             className="bg-white/50 dark:bg-slate-700/50"
                             data-testid={`button-download-original-${req.id}`}
                           >
                             <Download className="h-4 w-4 mr-1.5" />
                             Original
                           </Button>
-                          {req.status === 'completed' && req.editedImageId && (
+                          {req.status === 'completed' && req.editedFilePath && (
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              onClick={() => downloadImage(req.editedImageId!)}
+                              onClick={() => downloadImage(req.editedFilePath!)}
                               className="bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30 border-green-200 dark:border-green-800"
                               data-testid={`button-download-edited-${req.id}`}
                             >
@@ -448,7 +425,6 @@ export default function AdminDashboard() {
         </Card>
       </main>
 
-      {/* Upload Dialog */}
       <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && setSelectedRequest(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -465,12 +441,12 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-3">
                   <Avatar className="h-10 w-10">
                     <AvatarFallback className="bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-sm">
-                      {selectedRequest?.userFullName ? getInitials(selectedRequest.userFullName) : 'U'}
+                      {selectedRequest?.displayName ? getInitials(selectedRequest.displayName) : 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{selectedRequest?.userFullName}</p>
-                    <p className="text-xs text-muted-foreground">{selectedRequest?.userEmail}</p>
+                    <p className="font-medium">{selectedRequest?.displayName}</p>
+                    <p className="text-xs text-muted-foreground">ID: {selectedRequest?.employeeId}</p>
                   </div>
                 </div>
                 <div className="pt-2 border-t border-slate-200 dark:border-slate-700">

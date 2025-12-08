@@ -2,22 +2,21 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useDropzone } from "react-dropzone";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, CheckCircle2, Clock, Download, LogOut, Image as ImageIcon, ShieldCheck, RefreshCw, Wifi, WifiOff, CloudUpload, FileImage, Calendar, Sparkles } from "lucide-react";
+import { Upload, CheckCircle2, Clock, Download, LogOut, Image as ImageIcon, RefreshCw, Wifi, WifiOff, CloudUpload, FileImage, Calendar, Sparkles, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useWebSocket, WSMessage } from "@/hooks/use-websocket";
 
 interface ImageRequest {
   id: string;
   originalFileName: string;
-  originalImageId: string;
+  originalFilePath: string;
   editedFileName?: string;
-  editedImageId?: string;
+  editedFilePath?: string;
   status: 'pending' | 'completed';
   uploadedAt: string;
   completedAt?: string;
@@ -41,7 +40,7 @@ export default function UserDashboard() {
               ...req, 
               status: 'completed' as const,
               editedFileName: editedRequest.editedFileName,
-              editedImageId: editedRequest.editedImageId,
+              editedFilePath: editedRequest.editedFilePath,
               completedAt: editedRequest.completedAt,
             }
           : req
@@ -85,8 +84,8 @@ export default function UserDashboard() {
     const formData = new FormData();
     formData.append('image', acceptedFiles[0]);
     formData.append('userId', user.id);
-    formData.append('userEmail', user.email);
-    formData.append('userFullName', user.fullName);
+    formData.append('employeeId', user.employeeId);
+    formData.append('displayName', user.displayName);
 
     try {
       const progressInterval = setInterval(() => {
@@ -128,8 +127,10 @@ export default function UserDashboard() {
     disabled: isUploading,
   });
 
-  const downloadFile = (imageId: string) => {
-    window.open(`/api/images/serve/${imageId}`, '_blank');
+  const downloadFile = (filePath: string) => {
+    const filename = filePath.split('/').pop();
+    const type = filePath.includes('/edited/') ? 'edited' : 'original';
+    window.open(`/api/images/download/${type}/${filename}`, '_blank');
   };
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
@@ -138,7 +139,7 @@ export default function UserDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100">
       <header className="bg-white/80 backdrop-blur-lg border-b border-slate-200/50 sticky top-0 z-50">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="bg-gradient-to-br from-blue-600 to-cyan-500 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
               <ImageIcon className="h-5 w-5 text-white" />
@@ -164,22 +165,13 @@ export default function UserDashboard() {
             </div>
             <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-xl">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                {user?.fullName?.charAt(0).toUpperCase()}
+                {user?.displayName?.charAt(0).toUpperCase()}
               </div>
               <div className="text-sm">
-                <p className="font-medium text-slate-800">{user?.fullName}</p>
-                <p className="text-xs text-slate-500">{user?.email}</p>
+                <p className="font-medium text-slate-800">{user?.displayName}</p>
+                <p className="text-xs text-slate-500">ID: {user?.employeeId}</p>
               </div>
             </div>
-            
-            {user?.role === 'admin' && (
-              <Link href="/admin">
-                <Button variant="default" size="sm" className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90" data-testid="link-admin-portal">
-                  <ShieldCheck className="h-4 w-4" />
-                  <span className="hidden sm:inline">Admin</span>
-                </Button>
-              </Link>
-            )}
 
             <Button variant="ghost" size="icon" onClick={logout} className="text-slate-500 hover:text-slate-700 hover:bg-slate-100" data-testid="button-logout">
               <LogOut className="h-5 w-5" />
@@ -197,7 +189,7 @@ export default function UserDashboard() {
           >
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-slate-800 mb-1">
-                Welcome back, {user?.fullName?.split(' ')[0]}
+                Welcome, {user?.displayName}
               </h1>
               <p className="text-slate-500">Upload images and track your processing requests.</p>
             </div>
@@ -212,7 +204,7 @@ export default function UserDashboard() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Card className="border-none shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-blue-100 text-sm font-medium">Total Uploads</p>
                     <p className="text-3xl font-bold mt-1">{requests.length}</p>
@@ -227,7 +219,7 @@ export default function UserDashboard() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <Card className="border-none shadow-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white">
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-amber-100 text-sm font-medium">Pending</p>
                     <p className="text-3xl font-bold mt-1">{pendingCount}</p>
@@ -242,7 +234,7 @@ export default function UserDashboard() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <Card className="border-none shadow-lg bg-gradient-to-br from-green-500 to-emerald-500 text-white">
               <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-green-100 text-sm font-medium">Completed</p>
                     <p className="text-3xl font-bold mt-1">{completedCount}</p>
@@ -262,15 +254,33 @@ export default function UserDashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-slate-800">
                 <CloudUpload className="h-5 w-5 text-blue-500" />
-                Upload New Image
+                Upload Your Image
               </CardTitle>
               <CardDescription>Drag and drop or click to select an image for processing</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-100 rounded-full flex-shrink-0">
+                    <Info className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-800 mb-2">Image Requirements</p>
+                    <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+                      <li>Capture your photo in formal attire</li>
+                      <li>The photo should be clicked from the front side</li>
+                      <li>A full photo (head to toe) is required to create your final image</li>
+                      <li>Half or closeup photos are strictly not accepted</li>
+                      <li>Click the photo on a plain white background</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
               <div
                 {...getRootProps()}
                 className={`
-                  min-h-[250px] flex flex-col items-center justify-center rounded-2xl border-2 border-dashed 
+                  min-h-[200px] flex flex-col items-center justify-center rounded-2xl border-2 border-dashed 
                   transition-all duration-300 cursor-pointer relative overflow-hidden
                   ${isDragActive ? 'border-blue-500 bg-blue-50 scale-[1.02]' : 'border-slate-200 hover:border-blue-400 hover:bg-slate-50'}
                 `}
@@ -338,7 +348,7 @@ export default function UserDashboard() {
                           </div>
                           <div>
                             <h3 className="font-semibold text-slate-800 mb-1">{request.originalFileName}</h3>
-                            <div className="flex items-center gap-3 text-sm text-slate-500">
+                            <div className="flex items-center gap-3 text-sm text-slate-500 flex-wrap">
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-3.5 w-3.5" />
                                 {new Date(request.uploadedAt).toLocaleDateString()}
@@ -361,7 +371,7 @@ export default function UserDashboard() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => downloadFile(request.originalImageId)}
+                            onClick={() => downloadFile(request.originalFilePath)}
                             className="gap-2"
                             data-testid={`button-download-original-${request.id}`}
                           >
@@ -369,10 +379,10 @@ export default function UserDashboard() {
                             Original
                           </Button>
                           
-                          {request.status === 'completed' && request.editedImageId && (
+                          {request.status === 'completed' && request.editedFilePath && (
                             <Button 
                               size="sm"
-                              onClick={() => downloadFile(request.editedImageId!)}
+                              onClick={() => downloadFile(request.editedFilePath!)}
                               className="gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:opacity-90"
                               data-testid={`button-download-edited-${request.id}`}
                             >
@@ -401,9 +411,9 @@ export default function UserDashboard() {
             >
               <CheckCircle2 className="h-8 w-8 text-white" />
             </motion.div>
-            <DialogTitle className="text-center text-xl">Upload Successful!</DialogTitle>
+            <DialogTitle className="text-center text-xl">Image Uploaded Successfully!</DialogTitle>
             <DialogDescription className="text-center pt-2">
-              Your image has been received. You will receive an email notification when your edited image is ready for download.
+              You can download your edited image after 3 days.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-center">

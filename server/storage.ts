@@ -1,15 +1,16 @@
-import { type User, type OTPSession, type ImageRequest, getDatabase } from "@shared/schema";
+import { type User, type Employee, type ImageRequest, getDatabase } from "@shared/schema";
 import { ObjectId } from "mongodb";
 
 export interface IStorage {
-  // User operations
-  getUserByEmail(email: string): Promise<User | null>;
-  createUser(user: Omit<User, '_id' | 'createdAt'>): Promise<User>;
+  // Employee operations
+  getEmployeeByEmployeeId(employeeId: string): Promise<Employee | null>;
+  createEmployee(employee: Omit<Employee, '_id' | 'createdAt'>): Promise<Employee>;
+  getAllEmployees(): Promise<Employee[]>;
+  deleteAllEmployees(): Promise<void>;
   
-  // OTP operations
-  createOTPSession(session: Omit<OTPSession, '_id' | 'createdAt'>): Promise<OTPSession>;
-  getOTPSession(email: string): Promise<OTPSession | null>;
-  deleteOTPSession(email: string): Promise<void>;
+  // User operations
+  getUserByEmployeeId(employeeId: string): Promise<User | null>;
+  createUser(user: Omit<User, '_id' | 'createdAt'>): Promise<User>;
   
   // Image request operations
   createImageRequest(request: Omit<ImageRequest, '_id' | 'uploadedAt'>): Promise<ImageRequest>;
@@ -19,10 +20,38 @@ export interface IStorage {
 }
 
 export class MongoStorage implements IStorage {
-  // User operations
-  async getUserByEmail(email: string): Promise<User | null> {
+  // Employee operations
+  async getEmployeeByEmployeeId(employeeId: string): Promise<Employee | null> {
     const db = await getDatabase();
-    const user = await db.collection<User>('users').findOne({ email });
+    const employee = await db.collection<Employee>('employees').findOne({ employeeId: String(employeeId) });
+    return employee;
+  }
+
+  async createEmployee(employee: Omit<Employee, '_id' | 'createdAt'>): Promise<Employee> {
+    const db = await getDatabase();
+    const newEmployee: Employee = {
+      ...employee,
+      createdAt: new Date(),
+    };
+    const result = await db.collection<Employee>('employees').insertOne(newEmployee as any);
+    return { ...newEmployee, _id: result.insertedId };
+  }
+
+  async getAllEmployees(): Promise<Employee[]> {
+    const db = await getDatabase();
+    const employees = await db.collection<Employee>('employees').find({}).toArray();
+    return employees;
+  }
+
+  async deleteAllEmployees(): Promise<void> {
+    const db = await getDatabase();
+    await db.collection('employees').deleteMany({});
+  }
+
+  // User operations
+  async getUserByEmployeeId(employeeId: string): Promise<User | null> {
+    const db = await getDatabase();
+    const user = await db.collection<User>('users').findOne({ employeeId: String(employeeId) });
     return user;
   }
 
@@ -34,31 +63,6 @@ export class MongoStorage implements IStorage {
     };
     const result = await db.collection<User>('users').insertOne(newUser as any);
     return { ...newUser, _id: result.insertedId };
-  }
-
-  // OTP operations
-  async createOTPSession(session: Omit<OTPSession, '_id' | 'createdAt'>): Promise<OTPSession> {
-    const db = await getDatabase();
-    // Delete any existing sessions for this email
-    await db.collection('otp_sessions').deleteMany({ email: session.email });
-    
-    const newSession: OTPSession = {
-      ...session,
-      createdAt: new Date(),
-    };
-    const result = await db.collection<OTPSession>('otp_sessions').insertOne(newSession as any);
-    return { ...newSession, _id: result.insertedId };
-  }
-
-  async getOTPSession(email: string): Promise<OTPSession | null> {
-    const db = await getDatabase();
-    const session = await db.collection<OTPSession>('otp_sessions').findOne({ email });
-    return session;
-  }
-
-  async deleteOTPSession(email: string): Promise<void> {
-    const db = await getDatabase();
-    await db.collection('otp_sessions').deleteMany({ email });
   }
 
   // Image request operations
